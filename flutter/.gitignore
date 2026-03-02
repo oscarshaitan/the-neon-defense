@@ -30,7 +30,21 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
+# Ignore native build artifacts but keep the web build so GitHub Pages can serve it
+/build/android/
+/build/app/
+/build/ios/
+/build/linux/
+/build/macos/
+/build/windows/
+/build/flutter_assets/
+/build/.cxx/
+/build/native_hooks/
+/build/reports/
+/build/*_android/
+/build/*.dill*
+/build/*.bin
+/build/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*/
 /coverage/
 
 # Symbolication related

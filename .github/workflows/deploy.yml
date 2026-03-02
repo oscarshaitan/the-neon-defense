@@ -3,12 +3,19 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,31 +30,38 @@ jobs:
         working-directory: flutter
         run: |
           flutter pub get
-          flutter build web \
-            --release \
-            --web-renderer canvaskit \
-            --base-href /the-neon-defense/flutter/
+          flutter build web --release
+          # Use relative base-href so the app works at any served path
+          sed -i 's|<base href="/">|<base href="./">|g' build/web/index.html
 
       # ── Assemble deploy folder ─────────────────────────────────────────────
       # Structure served by GitHub Pages:
-      #   /             → landing page
-      #   /js/          → JS game
-      #   /flutter/     → Flutter web build
+      #   /                        → landing page
+      #   /js/                     → JS game
+      #   /flutter/build/web/      → Flutter web build (relative base-href)
       - name: Assemble site
         run: |
-          mkdir -p _site/js _site/flutter
-          # Landing page + docs
+          mkdir -p _site/js _site/flutter/build/web _site/assets
           cp index.html _site/
           cp README.md  _site/
-          # JS game (source is the deployable asset)
+          cp -r assets/. _site/assets/
           cp -r js/. _site/js/
-          # Flutter build output
-          cp -r flutter/build/web/. _site/flutter/
+          cp -r flutter/build/web/. _site/flutter/build/web/
 
-      # ── Push to gh-pages branch ────────────────────────────────────────────
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v4
+      # ── Upload artifact for GitHub Pages ───────────────────────────────────
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: _site
-          cname: ""   # remove if you add a custom domain
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

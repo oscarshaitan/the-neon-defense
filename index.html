@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Neon Defense</title>
+    <link rel="icon" type="image/png" href="./assets/favicon.png">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -42,6 +43,13 @@
                 linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
             background-size: 40px 40px;
             pointer-events: none;
+        }
+
+        .logo {
+            width: clamp(140px, 22vw, 220px);
+            height: auto;
+            margin-bottom: 1.2rem;
+            filter: drop-shadow(0 0 18px rgba(0, 243, 255, 0.35));
         }
 
         .title {
@@ -164,16 +172,17 @@
 </head>
 
 <body>
+    <img class="logo" src="./assets/logo.png" alt="The Neon Defense">
     <h1 class="title">The Neon Defense</h1>
     <p class="subtitle">Choose your platform</p>
 
     <div class="buttons">
-        <a class="btn btn-js" href="./js/">
+        <a class="btn btn-js" href="./js/index.html">
             <span>Web</span>
             <span class="btn-label">JavaScript</span>
         </a>
 
-        <a class="btn btn-flutter" href="./flutter/">
+        <a class="btn btn-flutter" href="./flutter/build/web/index.html">
             <span>App</span>
             <span class="btn-label">Flutter</span>
         </a>

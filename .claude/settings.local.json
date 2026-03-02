@@ -16,7 +16,17 @@
       "Bash(flutter analyze lib/game/vfx/)",
       "Bash(flutter analyze lib/ui/panels/selection_panel.dart)",
       "Bash(flutter analyze lib/game/neon_defense_game.dart lib/game/audio/)",
-      "Bash(flutter analyze --no-fatal-infos)"
+      "Bash(flutter analyze --no-fatal-infos)",
+      "Bash(flutter build web --release --web-renderer canvaskit --base-href /the-neon-defense/flutter/build/web/)",
+      "Bash(flutter build web --help)",
+      "Bash(flutter build web --release --base-href /the-neon-defense/flutter/build/web/)",
+      "Bash(MSYS_NO_PATHCONV=1 flutter build web --release --base-href /the-neon-defense/flutter/build/web/)",
+      "Bash(node --version)",
+      "Bash(magick --version)",
+      "Bash(convert --version)",
+      "Bash(node -e \"require\\(''sharp''\\)\")",
+      "Bash(npx --yes sharp-cli --version)",
+      "Bash(ls \"c:/Users/otigr/VS Code projects/the-neon-defense/\"*.png)"
     ]
   }
 }
