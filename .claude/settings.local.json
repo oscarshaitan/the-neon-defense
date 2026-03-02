@@ -6,7 +6,8 @@
       "Bash(grep -n \"toggleWavePanel\\\\|function toggleWavePanel\" \"c:/Users/otigr/.gemini/antigravity/scratch/html5-game/scripts/\"*.js)",
       "Bash(grep -n \"^function startWave\\\\|^function saveGame\\\\|^function loadGame\\\\|^function generateNewPath\\\\|^function startPrepPhase\\\\|^function findPathOnGrid\" /c/Users/otigr/.gemini/antigravity/scratch/html5-game/scripts/*.js)",
       "Bash(grep -n \"^window.saveGame\\\\|^function saveGame\\\\|^window.loadGame\\\\|^function loadGame\\\\|^window.fullReset\" /c/Users/otigr/.gemini/antigravity/scratch/html5-game/scripts/*.js)",
-      "Bash(powershell -Command \"Rename-Item -Path ''C:\\\\Users\\\\otigr\\\\.gemini\\\\antigravity\\\\scratch\\\\html5-game'' -NewName ''the-neon-defense''\")"
+      "Bash(powershell -Command \"Rename-Item -Path ''C:\\\\Users\\\\otigr\\\\.gemini\\\\antigravity\\\\scratch\\\\html5-game'' -NewName ''the-neon-defense''\")",
+      "Bash(git -C \"c:/Users/otigr/VS Code projects/the-neon-defense\" status --short)"
     ]
   }
 }
