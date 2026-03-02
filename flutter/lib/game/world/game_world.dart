@@ -179,10 +179,11 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
     if (game.money < cost) return;
 
     final hp = hardpointManager.getNearestSnap(worldPos);
-    if (hp != null && hp.occupied) return;
+    if (hp == null) return;
+    if (hp.occupied) return;
 
-    final placePos = hp?.worldPos.clone() ?? worldPos;
-    if (hp != null) hp.occupied = true;
+    hp.occupied = true;
+    final placePos = hp.worldPos.clone();
 
     game.money -= cost;
     final tower = Tower(

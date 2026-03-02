@@ -26,6 +26,7 @@ class Enemy extends PositionComponent {
   double staticCharges = 0;
   int staticStunTimer = 0;
   bool isInvisible = false;
+  double _visibilityTimer = 0; // shifter cycle timer (seconds)
 
   Enemy({
     required this.type,
@@ -82,6 +83,12 @@ class Enemy extends PositionComponent {
       position.addScaled(diff / dist, step);
       spatialGrid.update(this, oldPos);
     }
+
+    // Shifter: toggle invisibility every 3s (JS: frameCount % 360 > 180 at 60fps)
+    if (type == EnemyType.shifter) {
+      _visibilityTimer += dt;
+      isInvisible = (_visibilityTimer % 6.0) > 3.0;
+    }
   }
 
   void takeDamage(double dmg) {
@@ -103,9 +110,10 @@ class Enemy extends PositionComponent {
 
   void _die() {
     isDead = true;
-    final game = findGame()!;
-    // Award credits
-    (game as dynamic).money += reward;
+    final game = findGame()! as dynamic;
+    // Award credits + energy (JS: money += reward; energy = Math.min(maxEnergy, energy + 1))
+    game.money += reward;
+    game.energy = (game.energy + 1.0).clamp(0.0, kMaxEnergy);
     removeFromParent();
   }
 

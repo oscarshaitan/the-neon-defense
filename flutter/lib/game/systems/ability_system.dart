@@ -118,8 +118,7 @@ class AbilitySystem extends Component {
     final g = gameWorld.game;
     if (g.gameState != 'playing' || g.isPaused) return;
 
-    // Energy regen
-    g.energy = (g.energy + kEnergyRegenPerFrame).clamp(0, kMaxEnergy);
+    // Energy: JS gives +1 per kill only (no passive regen). See enemy.dart _die().
 
     // Cooldown tick (decrements every 60 frames)
     _cooldownTick++;

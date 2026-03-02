@@ -43,9 +43,12 @@ class HardpointManager extends Component {
 
   @override
   Future<void> onLoad() async {
+    // Match JS: Math.floor(cols/2) * GRID_SIZE + GRID_SIZE/2 → always a cell center
+    final coreCol = worldCols ~/ 2;
+    final coreRow = worldRows ~/ 2;
     coreWorldPos = Vector2(
-      worldCols * kGridSize / 2,
-      worldRows * kGridSize / 2,
+      coreCol * kGridSize + kGridSize / 2,
+      coreRow * kGridSize + kGridSize / 2,
     );
     _buildHardpoints();
   }
@@ -63,7 +66,7 @@ class HardpointManager extends Component {
         type: HardpointType.core,
         col: col,
         row: row,
-        worldPos: Vector2(x, y),
+        worldPos: Vector2(col * kGridSize + kGridSize / 2, row * kGridSize + kGridSize / 2),
       ));
     }
 
@@ -81,7 +84,7 @@ class HardpointManager extends Component {
           type: HardpointType.micro,
           col: col,
           row: row,
-          worldPos: Vector2(x, y),
+          worldPos: Vector2(col * kGridSize + kGridSize / 2, row * kGridSize + kGridSize / 2),
         ));
         microIndex++;
       }

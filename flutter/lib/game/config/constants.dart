@@ -92,47 +92,47 @@ const Map<EnemyType, EnemyDef> kEnemies = {
     type: EnemyType.basic,
     hp: 30,
     speed: 1.5,
-    color: Color(0xFFFF4444),
+    color: Color(0xFFFF0000), // JS: #ff0000
     reward: 10,
-    width: 18,
+    width: 20,
   ),
   EnemyType.fast: EnemyDef(
     type: EnemyType.fast,
     hp: 20,
     speed: 2.5,
-    color: Color(0xFFFCEE0A),
+    color: Color(0xFFFFFF00), // JS: #ffff00
     reward: 15,
-    width: 14,
+    width: 16,
   ),
   EnemyType.tank: EnemyDef(
     type: EnemyType.tank,
     hp: 100,
     speed: 0.8,
-    color: Color(0xFFFF00AC),
+    color: Color(0xFFFF00FF), // JS: #ff00ff
     reward: 30,
-    width: 26,
+    width: 24,
   ),
   EnemyType.boss: EnemyDef(
     type: EnemyType.boss,
     hp: 500,
     speed: 0.5,
-    color: Color(0xFFFF8C00),
+    color: Color(0xFFFF8800), // JS: #ff8800
     reward: 200,
-    width: 36,
+    width: 40,
   ),
   EnemyType.splitter: EnemyDef(
     type: EnemyType.splitter,
     hp: 80,
     speed: 1.2,
-    color: Color(0xFF00FF41),
+    color: Color(0xFF00FF41), // JS: #00ff41
     reward: 40,
-    width: 22,
+    width: 28,
   ),
   EnemyType.mini: EnemyDef(
     type: EnemyType.mini,
     hp: 20,
     speed: 2.0,
-    color: Color(0xFF00FF41),
+    color: Color(0xFF00FF41), // JS: #00ff41
     reward: 5,
     width: 12,
   ),
@@ -140,17 +140,17 @@ const Map<EnemyType, EnemyDef> kEnemies = {
     type: EnemyType.bulwark,
     hp: 350,
     speed: 0.6,
-    color: Color(0xFFFCEE0A),
+    color: Color(0xFFFCEE0A), // JS: #fcee0a
     reward: 60,
-    width: 30,
+    width: 32,
   ),
   EnemyType.shifter: EnemyDef(
     type: EnemyType.shifter,
     hp: 60,
     speed: 1.5,
-    color: Color(0xFFFF00AC),
+    color: Color(0xFFFF00AC), // JS: #ff00ac
     reward: 60,
-    width: 18,
+    width: 20,
   ),
 };
 
@@ -168,7 +168,7 @@ const int kArcMaxLinkSpacingCells = 3;
 // ---------------------------------------------------------------------------
 // Hardpoint rules
 // ---------------------------------------------------------------------------
-const double kHardpointSnapRadius = 18.0;
+const double kHardpointSnapRadius = 40.0;
 
 // Core ring
 const int kCoreHardpointCount = 6;
@@ -176,7 +176,7 @@ const int kCoreHardpointRadiusCells = 6;
 const double kCoreDamageMult = 1.08;
 const double kCoreRangeMult = 1.06;
 const double kCoreCooldownMult = 0.95;
-const double kCoreScaleMult = 1.08;
+const double kCoreScaleMult = 1.0; // JS: sizeScale: 1.0
 
 // Micro rings
 const List<({int count, int radiusCells, double angleOffset})> kMicroRings = [

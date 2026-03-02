@@ -88,12 +88,60 @@ class WaveSystem extends Component with HasGameReference {
     spawnTimer = 0;
     enemiesSpawned = 0;
 
-    // Build spawn queue
+    // Build spawn queue — matches JS startWave() exactly
     final count = 5 + (g.wave * 2.5).floor();
-    totalEnemies = count;
     for (int i = 0; i < count; i++) {
-      spawnQueue.add(_pickEnemyType(g.wave));
+      EnemyType type;
+      final r = _rng.nextDouble();
+
+      if (g.wave < 3) {
+        type = EnemyType.basic;
+      } else if (g.wave < 5) {
+        type = r < 0.3 ? EnemyType.fast : EnemyType.basic;
+      } else if (g.wave < 10) {
+        if (g.wave % 5 == 0 && i < 2) {
+          type = EnemyType.tank;
+        } else if (r < 0.2) {
+          type = EnemyType.fast;
+        } else if (r < 0.25) {
+          type = EnemyType.tank;
+        } else {
+          type = EnemyType.basic;
+        }
+      } else {
+        final chance = _rng.nextDouble();
+        if (chance < 0.08 && g.wave >= 30) {
+          type = EnemyType.shifter;
+        } else if (chance < 0.15 && g.wave >= 20) {
+          type = EnemyType.bulwark;
+        } else if (chance < 0.30 && g.wave >= 15) {
+          type = EnemyType.splitter;
+        } else if (chance < 0.50) {
+          type = EnemyType.fast;
+        } else if (chance < 0.70) {
+          type = EnemyType.tank;
+        } else {
+          type = EnemyType.basic;
+        }
+      }
+      spawnQueue.add(type);
     }
+
+    // Boss wave: insert boss at random queue position (JS: wave % 10 === 0)
+    if (g.wave % 10 == 0) {
+      final idx = _rng.nextInt(spawnQueue.length + 1);
+      spawnQueue.insert(idx, EnemyType.boss);
+    }
+
+    // Surprise boss after wave 50 (JS: 25% chance)
+    if (g.wave > 50 && g.wave % 5 == 0 && g.wave % 10 != 0) {
+      if (_rng.nextDouble() < 0.25) {
+        final idx = _rng.nextInt(spawnQueue.length + 1);
+        spawnQueue.insert(idx, EnemyType.boss);
+      }
+    }
+
+    totalEnemies = spawnQueue.length;
   }
 
   void _endWave() {
@@ -132,19 +180,7 @@ class WaveSystem extends Component with HasGameReference {
     return gameWorld.children.whereType<Enemy>().isEmpty;
   }
 
-  EnemyType _pickEnemyType(int wave) {
-    // Distribution shifts by wave — matches JS logic
-    final roll = _rng.nextDouble();
-    if (wave >= 30 && roll < 0.08) return EnemyType.shifter;
-    if (wave >= 20 && roll < 0.10) return EnemyType.bulwark;
-    if (wave >= 15 && roll < 0.12) return EnemyType.splitter;
-    if (wave % 10 == 0 && roll < 0.05) return EnemyType.boss;
-    if (wave >= 5 && roll < 0.15) return EnemyType.tank;
-    if (wave >= 3 && roll < 0.25) return EnemyType.fast;
-    return EnemyType.basic;
-  }
-
-  Future<void> _generateMissingRifts() async {
+Future<void> _generateMissingRifts() async {
     // Wave 1: 1 rift; +1 every 10 waves to wave 50; +1 every 5 waves after
     final g = gameWorld.game;
     int targetRifts;

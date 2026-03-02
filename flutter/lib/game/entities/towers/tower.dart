@@ -47,7 +47,10 @@ class Tower extends PositionComponent
         range = (kTowers[type]!.range *
             (hardpoint?.rangeMult ?? 1.0))
             .clamp(0, 800),
-        maxCooldown = kTowers[type]!.cooldown,
+        // JS: Math.max(4, towerConfig.cooldown * hardpointRules.cooldownMult)
+        maxCooldown = hardpoint != null
+            ? max(4, (kTowers[type]!.cooldown * hardpoint.cooldownMult).round())
+            : kTowers[type]!.cooldown,
         cooldown = 0,
         color = kTowers[type]!.color,
         baseCost = kTowers[type]!.cost,
@@ -109,13 +112,14 @@ class Tower extends PositionComponent
   double get upgradeCost => baseCost * 0.5 * level;
 
   void upgrade() {
+    final cost = upgradeCost; // capture before level++ (JS: getUpgradeCost called before level++)
     level++;
     damage *= 1.2;
     range = (range * 1.1).clamp(0, 800);
-    totalCost += upgradeCost;
+    totalCost += cost;
   }
 
-  double get sellValue => totalCost * 0.6;
+  double get sellValue => totalCost * 0.7; // JS: Math.floor(totalCost * 0.7)
 
   // ---------------------------------------------------------------------------
   // Rendering
