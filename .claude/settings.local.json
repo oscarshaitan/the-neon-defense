@@ -7,7 +7,16 @@
       "Bash(grep -n \"^function startWave\\\\|^function saveGame\\\\|^function loadGame\\\\|^function generateNewPath\\\\|^function startPrepPhase\\\\|^function findPathOnGrid\" /c/Users/otigr/.gemini/antigravity/scratch/html5-game/scripts/*.js)",
       "Bash(grep -n \"^window.saveGame\\\\|^function saveGame\\\\|^window.loadGame\\\\|^function loadGame\\\\|^window.fullReset\" /c/Users/otigr/.gemini/antigravity/scratch/html5-game/scripts/*.js)",
       "Bash(powershell -Command \"Rename-Item -Path ''C:\\\\Users\\\\otigr\\\\.gemini\\\\antigravity\\\\scratch\\\\html5-game'' -NewName ''the-neon-defense''\")",
-      "Bash(git -C \"c:/Users/otigr/VS Code projects/the-neon-defense\" status --short)"
+      "Bash(git -C \"c:/Users/otigr/VS Code projects/the-neon-defense\" status --short)",
+      "WebFetch(domain:api.flutter.dev)",
+      "Bash(flutter create flutter --platforms web,android,ios --project-name neon_defense)",
+      "Bash(flutter pub add flame flame_audio shared_preferences google_fonts)",
+      "Bash(flutter analyze)",
+      "Bash(flutter analyze lib/game/vfx/particle_system.dart)",
+      "Bash(flutter analyze lib/game/vfx/)",
+      "Bash(flutter analyze lib/ui/panels/selection_panel.dart)",
+      "Bash(flutter analyze lib/game/neon_defense_game.dart lib/game/audio/)",
+      "Bash(flutter analyze --no-fatal-infos)"
     ]
   }
 }

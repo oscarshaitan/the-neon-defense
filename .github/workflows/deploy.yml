@@ -1,0 +1,53 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Flutter build ──────────────────────────────────────────────────────
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build Flutter web
+        working-directory: flutter
+        run: |
+          flutter pub get
+          flutter build web \
+            --release \
+            --web-renderer canvaskit \
+            --base-href /the-neon-defense/flutter/
+
+      # ── Assemble deploy folder ─────────────────────────────────────────────
+      # Structure served by GitHub Pages:
+      #   /             → landing page
+      #   /js/          → JS game
+      #   /flutter/     → Flutter web build
+      - name: Assemble site
+        run: |
+          mkdir -p _site/js _site/flutter
+          # Landing page + docs
+          cp index.html _site/
+          cp README.md  _site/
+          # JS game (source is the deployable asset)
+          cp -r js/. _site/js/
+          # Flutter build output
+          cp -r flutter/build/web/. _site/flutter/
+
+      # ── Push to gh-pages branch ────────────────────────────────────────────
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: _site
+          cname: ""   # remove if you add a custom domain
