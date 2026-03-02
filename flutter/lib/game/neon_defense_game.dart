@@ -6,10 +6,11 @@ import 'config/constants.dart';
 import 'world/game_world.dart';
 import 'camera/game_camera.dart';
 import 'audio/audio_manager.dart';
+import 'entities/towers/tower.dart';
 import 'systems/save_system.dart';
 
 class NeonDefenseGame extends FlameGame
-    with ScaleDetector, HasKeyboardHandlerComponents {
+    with ScaleDetector, HasKeyboardHandlerComponents, TapCallbacks {
   late GameWorld gameWorld;
   late GameCamera gameCamera;
   final AudioManager audio = AudioManager();
@@ -24,6 +25,15 @@ class NeonDefenseGame extends FlameGame
   bool isWaveActive = false;
   bool isPaused = false;
   String gameState = 'start'; // 'start' | 'playing' | 'gameover'
+
+  Tower? selectedTower;
+
+  void selectTower(Tower? tower) {
+    selectedTower?.isSelected = false;
+    selectedTower = tower;
+    tower?.isSelected = true;
+    if (tower != null) gameWorld.selectedTowerType = null;
+  }
 
   @override
   Color backgroundColor() => kColorBg;
@@ -44,6 +54,20 @@ class NeonDefenseGame extends FlameGame
     super.update(dt);
     if (gameState == 'playing' && !isPaused) {
       gameWorld.qualityGovernor.recordFrameMs(dt * 1000);
+    }
+  }
+
+  @override
+  void onTapDown(TapDownEvent event) {
+    if (gameState != 'playing' || isPaused) return;
+    final worldPos = gameCamera.screenToWorld(event.canvasPosition);
+    final ability = gameWorld.abilitySystem;
+    if (ability.isTargeting) {
+      ability.useAbility(worldPos);
+    } else if (gameWorld.selectedTowerType != null) {
+      gameWorld.placeTower(worldPos);
+    } else {
+      selectTower(null);
     }
   }
 
@@ -101,6 +125,7 @@ class NeonDefenseGame extends FlameGame
     isWaveActive = false;
     isPaused = false;
     gameState = 'playing';
+    selectTower(null);
     overlays.remove('gameOverScreen');
     overlays.add('hud');
     gameWorld.reset();

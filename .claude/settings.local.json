@@ -27,7 +27,10 @@
       "Bash(node -e \"require\\(''sharp''\\)\")",
       "Bash(npx --yes sharp-cli --version)",
       "Bash(ls \"c:/Users/otigr/VS Code projects/the-neon-defense/\"*.png)",
-      "Bash(gh run list --limit 10)"
+      "Bash(gh run list --limit 10)",
+      "Bash(ls -la \"c:\\\\Users\\\\otigr\\\\VS Code projects\\\\the-neon-defense\\\\flutter\\\\lib\"\" 2>/dev/null || echo \"Directory check \")",
+      "Bash(curl -L \"https://github.com/google/fonts/raw/main/ofl/orbitron/Orbitron%5Bwght%5D.ttf\" -o \"c:/Users/otigr/VS Code projects/the-neon-defense/flutter/assets/fonts/Orbitron.ttf\" --max-time 30)",
+      "Bash(flutter pub get)"
     ]
   }
 }

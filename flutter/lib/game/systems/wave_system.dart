@@ -32,6 +32,10 @@ class WaveSystem extends Component with HasGameReference {
     _generateMissingRifts();
   }
 
+  void skipPrep() {
+    if (isPrepPhase) prepTimer = 0;
+  }
+
   void reset() {
     rifts.clear();
     spawnQueue.clear();

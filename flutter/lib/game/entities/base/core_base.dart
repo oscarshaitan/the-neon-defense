@@ -15,6 +15,9 @@ class CoreBase extends PositionComponent {
 
   final SpatialGrid spatialGrid;
 
+  // Green (#00ff41) matching JS game
+  static const _green = Color(0xFF00FF41);
+
   CoreBase({required Vector2 worldCenter, required this.spatialGrid})
       : super(
           position: worldCenter,
@@ -27,7 +30,7 @@ class CoreBase extends PositionComponent {
 
   @override
   void update(double dt) {
-    if (level == 0) return; // no turret at level 0
+    if (level == 0) return;
 
     if (baseCooldown > 0) {
       baseCooldown--;
@@ -43,7 +46,7 @@ class CoreBase extends PositionComponent {
         target: target,
         damage: baseDamage,
         speed: 7.0,
-        color: kColorNeonBlue,
+        color: _green,
       ));
       baseCooldown = baseMaxCooldown;
     }
@@ -57,63 +60,45 @@ class CoreBase extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
-    // Crystal diamond shape
-    final halfW = size.x / 2;
-    final path = Path()
-      ..moveTo(0, -halfW)
-      ..lineTo(halfW * 0.6, -halfW * 0.2)
-      ..lineTo(halfW * 0.6, halfW * 0.4)
-      ..lineTo(0, halfW)
-      ..lineTo(-halfW * 0.6, halfW * 0.4)
-      ..lineTo(-halfW * 0.6, -halfW * 0.2)
-      ..close();
+    const r = 18.0;
 
+    // Glow layer
     canvas.drawPath(
-      path,
+      _diamond(r),
       Paint()
-        ..color = kColorNeonBlue.withAlpha(180)
+        ..color = _green
+        ..style = PaintingStyle.fill
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
+    );
+
+    // Solid green diamond — matches JS exactly
+    canvas.drawPath(
+      _diamond(r),
+      Paint()
+        ..color = _green
         ..style = PaintingStyle.fill,
     );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = kColorNeonBlue
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
 
-    // Hexagonal shield ring
-    _drawHexRing(canvas, halfW * 1.6);
-
-    // Level indicator
+    // Level indicator pips
     if (level > 0) {
       for (int i = 0; i < level; i++) {
         final angle = -pi / 2 + i * (2 * pi / 10);
-        final r = halfW * 1.4;
+        final pr = r * 1.8;
         canvas.drawCircle(
-          Offset(r * cos(angle), r * sin(angle)),
+          Offset(pr * cos(angle), pr * sin(angle)),
           2.5,
-          Paint()..color = kColorNeonBlue,
+          Paint()..color = _green,
         );
       }
     }
   }
 
-  void _drawHexRing(Canvas canvas, double r) {
-    final path = Path();
-    for (int i = 0; i < 6; i++) {
-      final angle = pi / 6 + i * pi / 3;
-      final x = r * cos(angle);
-      final y = r * sin(angle);
-      if (i == 0) { path.moveTo(x, y); } else { path.lineTo(x, y); }
-    }
-    path.close();
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = kColorNeonBlue.withAlpha(60)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+  static Path _diamond(double r) {
+    return Path()
+      ..moveTo(0, -r)
+      ..lineTo(r, 0)
+      ..lineTo(0, r)
+      ..lineTo(-r, 0)
+      ..close();
   }
 }

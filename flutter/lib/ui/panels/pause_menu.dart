@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../game/neon_defense_game.dart';
 
 class PauseMenu extends StatelessWidget {
@@ -20,12 +19,13 @@ class PauseMenu extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              const Text(
                 'PAUSED',
-                style: GoogleFonts.orbitron(
+                style: TextStyle(
+                  fontFamily: 'Orbitron',
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
-                  color: const Color(0xFF00F3FF),
+                  color: Color(0xFF00F3FF),
                   letterSpacing: 6,
                 ),
               ),
@@ -57,7 +57,11 @@ class PauseMenu extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: GoogleFonts.orbitron(fontSize: 13, letterSpacing: 3),
+        style: const TextStyle(
+          fontFamily: 'Orbitron',
+          fontSize: 13,
+          letterSpacing: 3,
+        ),
       ),
     );
   }

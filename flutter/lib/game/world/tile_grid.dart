@@ -10,9 +10,10 @@ class TileGrid extends Component {
   late final double worldWidth;
   late final double worldHeight;
 
+  // Match JS exactly: rgba(255, 255, 255, 0.08) — white, not blue
   static final Paint _gridPaint = Paint()
-    ..color = const Color(0x08_00F3FF) // very faint neon blue
-    ..strokeWidth = 0.5
+    ..color = const Color(0x14FFFFFF)
+    ..strokeWidth = 1.0
     ..style = PaintingStyle.stroke;
 
   TileGrid(this.cols, this.rows) {
@@ -22,24 +23,25 @@ class TileGrid extends Component {
 
   @override
   void render(Canvas canvas) {
-    // Frustum culling: only draw lines inside visible bounds.
-    // The camera transform is applied by Flame before render() is called,
-    // so we draw in world space.
-    for (int c = 0; c <= cols; c++) {
+    // Extend grid well beyond world bounds to appear infinite at any zoom level
+    const extra = kGridSize * 60.0;
+    final startX = -extra;
+    final endX = worldWidth + extra;
+    final startY = -extra;
+    final endY = worldHeight + extra;
+
+    final startCol = (startX / kGridSize).floor();
+    final endCol = (endX / kGridSize).ceil();
+    final startRow = (startY / kGridSize).floor();
+    final endRow = (endY / kGridSize).ceil();
+
+    for (int c = startCol; c <= endCol; c++) {
       final x = c * kGridSize;
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, worldHeight),
-        _gridPaint,
-      );
+      canvas.drawLine(Offset(x, startY), Offset(x, endY), _gridPaint);
     }
-    for (int r = 0; r <= rows; r++) {
+    for (int r = startRow; r <= endRow; r++) {
       final y = r * kGridSize;
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(worldWidth, y),
-        _gridPaint,
-      );
+      canvas.drawLine(Offset(startX, y), Offset(endX, y), _gridPaint);
     }
   }
 

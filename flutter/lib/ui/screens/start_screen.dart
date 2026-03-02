@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../game/neon_defense_game.dart';
 
 class StartScreen extends StatelessWidget {
@@ -14,27 +13,26 @@ class StartScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
+            const Text(
               'THE NEON DEFENSE',
-              style: GoogleFonts.orbitron(
+              style: TextStyle(
+                fontFamily: 'Orbitron',
                 fontSize: 36,
                 fontWeight: FontWeight.w900,
-                color: const Color(0xFF00F3FF),
+                color: Color(0xFF00F3FF),
                 shadows: [
-                  const Shadow(
-                    color: Color(0x9900F3FF),
-                    blurRadius: 20,
-                  ),
+                  Shadow(color: Color(0x9900F3FF), blurRadius: 20),
                 ],
                 letterSpacing: 4,
               ),
             ),
             const SizedBox(height: 12),
-            Text(
+            const Text(
               'FLUTTER EDITION',
-              style: GoogleFonts.orbitron(
+              style: TextStyle(
+                fontFamily: 'Orbitron',
                 fontSize: 12,
-                color: const Color(0x8800F3FF),
+                color: Color(0x8800F3FF),
                 letterSpacing: 8,
               ),
             ),
@@ -66,7 +64,8 @@ class _NeonButton extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: GoogleFonts.orbitron(
+        style: const TextStyle(
+          fontFamily: 'Orbitron',
           fontSize: 16,
           fontWeight: FontWeight.bold,
           letterSpacing: 4,

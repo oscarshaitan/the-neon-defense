@@ -1,5 +1,6 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart';
 
 import 'game/neon_defense_game.dart';
@@ -99,47 +100,62 @@ class _GamePageState extends State<_GamePage> {
   }
 }
 
-class _HudLayer extends StatelessWidget {
+class _HudLayer extends StatefulWidget {
   final NeonDefenseGame game;
   const _HudLayer({required this.game});
 
   @override
+  State<_HudLayer> createState() => _HudLayerState();
+}
+
+class _HudLayerState extends State<_HudLayer>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker((_) => setState(() {}));
+    _ticker.start();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final game = widget.game;
     return Stack(
       children: [
         StatsBar(game: game),
         TowerBar(game: game),
         AbilitiesBar(game: game),
-        SelectionPanel(game: game),
-        // Pause button (top-right)
+        SelectionPanel(game: game, selectedTower: game.selectedTower),
+        // Recenter button — bottom-right circle, matches JS #recenter-btn
         SafeArea(
           child: Align(
-            alignment: Alignment.topRight,
+            alignment: Alignment.bottomRight,
             child: Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.only(bottom: 20, right: 20),
               child: GestureDetector(
-                onTap: () {
-                  game.isPaused = !game.isPaused;
-                  if (game.isPaused) {
-                    game.overlays.add('pauseMenu');
-                  } else {
-                    game.overlays.remove('pauseMenu');
-                  }
-                },
+                onTap: () => game.gameCamera.resetCamera(),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  width: 52,
+                  height: 52,
                   decoration: BoxDecoration(
-                    color: const Color(0xE6050510),
-                    border: Border.all(color: const Color(0x6000F3FF), width: 1),
+                    shape: BoxShape.circle,
+                    color: const Color(0xB3000000),
+                    border: Border.all(
+                        color: const Color(0xFF00F3FF), width: 2),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x8800F3FF), blurRadius: 15),
+                    ],
                   ),
-                  child: const Text(
-                    'II',
-                    style: TextStyle(
-                      color: Color(0xFF00F3FF),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: const Icon(Icons.my_location,
+                      color: Color(0xFF00F3FF), size: 24),
                 ),
               ),
             ),

@@ -4,12 +4,14 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 
 import '../../config/constants.dart';
+import '../../neon_defense_game.dart';
 import '../../systems/spatial_grid.dart';
 import '../../world/hardpoint_manager.dart';
 import '../enemies/enemy.dart';
 import '../projectiles/projectile.dart';
 
-class Tower extends PositionComponent with TapCallbacks {
+class Tower extends PositionComponent
+    with TapCallbacks, HasGameReference<NeonDefenseGame> {
   final TowerType type;
   double damage;
   double range;
@@ -209,7 +211,7 @@ class Tower extends PositionComponent with TapCallbacks {
 
   @override
   void onTapDown(TapDownEvent event) {
-    // Selection handled by parent world
+    game.selectTower(this);
     event.handled = true;
   }
 }
