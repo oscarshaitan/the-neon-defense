@@ -133,6 +133,7 @@ class PlacementSystem {
 
     // Quick flow: keep the newly built tower selected (JS selectPlacedTower).
     game.selection.selectTower(tower);
+    game.audio.playBuild();
     game.saveSystem.save(); // JS saves on build
     return tower;
   }

@@ -1,11 +1,22 @@
-import 'package:flame_audio/flame_audio.dart';
+import 'dart:convert';
 
-/// Wraps flame_audio for music and SFX.
-/// All methods are safe to call before assets are loaded — they no-op silently.
+import 'package:flame_audio/flame_audio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+const _kAudioSettingsKey = 'neonAudioSettings';
+
+/// Audio with JS AudioEngine semantics (00_core.js:406-705), playing
+/// pre-rendered loops of the same procedural patterns (tool/render_audio.py):
+/// - music: threat loop while a boss/mutant is alive, else the wave-indexed
+///   normal loop ((wave-1) % 15)
+/// - SFX: shoot / explosion / hit / build
+/// - master mute + music/sfx volumes persisted like JS neonAudioSettings
 class AudioManager {
-  double _musicVolume = 0.5;
-  double _sfxVolume = 0.8;
+  double _musicVolume = 0.5; // JS musicVol default
+  double _sfxVolume = 0.7; // JS sfxVol default
   bool _muted = false;
+
+  String? _currentTrack;
 
   bool get muted => _muted;
   double get musicVolume => _musicVolume;
@@ -16,35 +27,74 @@ class AudioManager {
   // ---------------------------------------------------------------------------
 
   Future<void> init() async {
-    // Pre-cache SFX so first play has no latency.
-    // Files must exist in assets/audio/ — silently skip missing ones.
-    await _safeCache('shoot.wav');
-    await _safeCache('hit.wav');
-    await _safeCache('emp.wav');
-    await _safeCache('wave_start.wav');
-    await _safeCache('game_over.wav');
-  }
-
-  Future<void> _safeCache(String file) async {
+    await _loadSettings();
     try {
-      await FlameAudio.audioCache.load(file);
+      await FlameAudio.audioCache.loadAll([
+        'shoot.wav',
+        'explosion.wav',
+        'hit.wav',
+        'build.wav',
+      ]);
     } catch (_) {
-      // Asset not yet provided — skip
+      // Assets missing — keep silent.
     }
   }
 
+  Future<void> _loadSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kAudioSettingsKey);
+      if (raw == null) return;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      _musicVolume = (data['music'] as num?)?.toDouble() ?? 0.5;
+      _sfxVolume = (data['sfx'] as num?)?.toDouble() ?? 0.7;
+      _muted = data['muted'] as bool? ?? false;
+    } catch (_) {}
+  }
+
+  Future<void> _saveSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _kAudioSettingsKey,
+        jsonEncode({'music': _musicVolume, 'sfx': _sfxVolume, 'muted': _muted}),
+      );
+    } catch (_) {}
+  }
+
   // ---------------------------------------------------------------------------
-  // Music
+  // Music — JS updateMusic
   // ---------------------------------------------------------------------------
 
-  Future<void> playMusic(String file) async {
+  /// Call regularly with current wave + threat presence; switches tracks
+  /// only when the target changes (JS updateMusic).
+  void updateMusic({required int wave, required bool hasThreat}) {
+    final track = hasThreat
+        ? 'music_threat.wav'
+        : 'music_normal_${(((wave - 1) % 15) + 1).toString().padLeft(2, '0')}.wav';
+    if (track == _currentTrack) return;
+    _currentTrack = track;
     if (_muted) return;
     try {
-      await FlameAudio.bgm.play(file, volume: _musicVolume);
+      FlameAudio.bgm.play(track, volume: _musicVolume);
+    } catch (_) {}
+  }
+
+  void pauseMusic() {
+    try {
+      FlameAudio.bgm.pause();
+    } catch (_) {}
+  }
+
+  void resumeMusic() {
+    if (_muted || _currentTrack == null) return;
+    try {
+      FlameAudio.bgm.resume();
     } catch (_) {}
   }
 
   void stopMusic() {
+    _currentTrack = null;
     try {
       FlameAudio.bgm.stop();
     } catch (_) {}
@@ -52,18 +102,20 @@ class AudioManager {
 
   void setMusicVolume(double v) {
     _musicVolume = v.clamp(0.0, 1.0);
-    FlameAudio.bgm.audioPlayer.setVolume(_musicVolume);
+    try {
+      FlameAudio.bgm.audioPlayer.setVolume(_musicVolume);
+    } catch (_) {}
+    _saveSettings();
   }
 
   // ---------------------------------------------------------------------------
-  // SFX
+  // SFX — JS playSFX types
   // ---------------------------------------------------------------------------
 
   void playShoot() => _playSfx('shoot.wav');
-  void playHit()   => _playSfx('hit.wav');
-  void playEmp()   => _playSfx('emp.wav');
-  void playWaveStart() => _playSfx('wave_start.wav');
-  void playGameOver()  => _playSfx('game_over.wav');
+  void playExplosion() => _playSfx('explosion.wav');
+  void playHit() => _playSfx('hit.wav');
+  void playBuild() => _playSfx('build.wav');
 
   void _playSfx(String file) {
     if (_muted) return;
@@ -72,16 +124,25 @@ class AudioManager {
     } catch (_) {}
   }
 
-  void setSfxVolume(double v) => _sfxVolume = v.clamp(0.0, 1.0);
+  void setSfxVolume(double v) {
+    _sfxVolume = v.clamp(0.0, 1.0);
+    _saveSettings();
+  }
 
   // ---------------------------------------------------------------------------
   // Mute
   // ---------------------------------------------------------------------------
 
-  void toggleMute() {
+  bool toggleMute() {
     _muted = !_muted;
     if (_muted) {
-      stopMusic();
+      try {
+        FlameAudio.bgm.pause();
+      } catch (_) {}
+    } else {
+      resumeMusic();
     }
+    _saveSettings();
+    return _muted;
   }
 }

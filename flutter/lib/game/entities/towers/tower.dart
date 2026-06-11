@@ -132,9 +132,10 @@ class Tower extends PositionComponent
       color: color,
     );
     parent?.add(proj);
-    // JS shoot(): muzzle flash light r40.
+    // JS shoot(): muzzle flash light r40 + throttled shoot SFX.
     game.gameWorld.lights
         .emit(x: position.x, y: position.y, radius: 40, color: color);
+    game.playShootSfx();
   }
 
   // ---------------------------------------------------------------------------

@@ -108,6 +108,7 @@ class WaveSystem extends Component with HasGameReference {
     if (wave % 20 == 0 && rifts.isNotEmpty) {
       final target = rifts[rng.nextInt(rifts.length)];
       target.mutation = kMutationProfiles[rng.nextInt(kMutationProfiles.length)];
+      g.audio.playHit(); // JS mutation alert sound
     }
 
     // Build spawn queue — matches JS startWave() exactly
@@ -160,10 +161,12 @@ class WaveSystem extends Component with HasGameReference {
       if (rng.nextDouble() < 0.25) {
         final idx = rng.nextInt(spawnQueue.length + 1);
         spawnQueue.insert(idx, EnemyType.boss);
+        g.audio.playHit(); // JS surprise-boss alert
       }
     }
 
     totalEnemies = spawnQueue.length;
+    g.audio.playBuild(); // JS plays 'build' on wave start
     g.saveSystem.save(); // JS saves on wave start
   }
 

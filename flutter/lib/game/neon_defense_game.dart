@@ -26,6 +26,20 @@ class NeonDefenseGame extends FlameGame
   final SelectionState selection = SelectionState();
   final EntityRegistry entities = EntityRegistry();
 
+  // JS playShootSFX throttle (05_loop.js:691-700): min interval by quality.
+  int _lastShootSfxFrame = -1000000;
+
+  void playShootSfx() {
+    final minInterval = switch (gameWorld.qualityGovernor.currentProfile) {
+      QualityProfile.high => 1,
+      QualityProfile.balanced => 2,
+      QualityProfile.low => 3,
+    };
+    if (state.frameCount - _lastShootSfxFrame < minInterval) return;
+    _lastShootSfxFrame = state.frameCount;
+    audio.playShoot();
+  }
+
   // Fixed 60 Hz logic stepping so JS frame-based numbers (cooldowns in
   // frames, spawn every 60 frames, stun 30 frames) transfer 1:1 regardless
   // of display refresh rate.
@@ -131,8 +145,10 @@ class NeonDefenseGame extends FlameGame
     state.isPaused.value = !state.isPaused.value;
     if (state.isPaused.value) {
       overlays.add('pauseMenu');
+      audio.pauseMusic();
     } else {
       overlays.remove('pauseMenu');
+      audio.resumeMusic();
     }
   }
 
@@ -160,6 +176,8 @@ class NeonDefenseGame extends FlameGame
   void gameOver() {
     saveSystem.flushQueuedAutoSave(force: true);
     saveSystem.save(); // JS saves on game over
+    audio.playHit(); // JS plays 'hit' on system failure
+    audio.stopMusic();
     state.phase.value = GamePhase.gameover;
     overlays.remove('hud');
     overlays.add('gameOverScreen');

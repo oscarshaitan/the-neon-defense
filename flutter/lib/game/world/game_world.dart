@@ -108,6 +108,15 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
     if (!game.state.isPlaying) return;
     game.state.frameCount++;
     super.updateTree(dt);
+
+    // JS update() ends with AudioEngine.updateMusic(): threat track while a
+    // boss/mutant is alive, else the wave-indexed melody.
+    if (game.state.frameCount % 30 == 0) {
+      final hasThreat = game.entities.enemies
+          .any((e) => e.type == EnemyType.boss || e.isMutant);
+      game.audio.updateMusic(
+          wave: game.state.wave.value, hasThreat: hasThreat);
+    }
   }
 
   // ---------------------------------------------------------------------------

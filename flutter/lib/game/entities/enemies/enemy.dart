@@ -156,6 +156,7 @@ class Enemy extends PositionComponent
     if (type == EnemyType.splitter) {
       game.gameWorld.spawnMinis(this);
     }
+    game.audio.playExplosion();
     game.saveSystem.queueAutoSave(); // JS batches combat saves
     removeFromParent();
   }
@@ -164,6 +165,7 @@ class Enemy extends PositionComponent
     reachedCore = true;
     game.state.lives.value -= 1;
     game.state.startShake(20); // JS startShake(20) on core breach
+    game.audio.playHit();
     if (game.state.lives.value <= 0) {
       game.gameOver();
     }

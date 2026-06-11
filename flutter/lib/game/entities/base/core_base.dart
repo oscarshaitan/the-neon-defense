@@ -56,6 +56,7 @@ class CoreBase extends PositionComponent
     game.state.lives.value += 2;
     game.gameWorld.particles.createParticles(
         position.x, position.y, const Color(0xFF00FF41), 20); // green heal
+    game.audio.playBuild();
     game.saveSystem.save();
     return true;
   }
@@ -70,6 +71,7 @@ class CoreBase extends PositionComponent
     level++;
     game.gameWorld.particles.createParticles(
         position.x, position.y, const Color(0xFF00F3FF), 30); // blue upgrade
+    game.audio.playBuild();
     game.saveSystem.save();
     return true;
   }
@@ -101,6 +103,7 @@ class CoreBase extends PositionComponent
         color: _green,
       ));
       baseCooldown = currentCooldown;
+      game.playShootSfx();
     }
   }
 

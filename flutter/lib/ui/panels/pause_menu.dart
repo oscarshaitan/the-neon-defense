@@ -50,11 +50,68 @@ class _PauseMenuState extends State<PauseMenu> {
                 game.resetGame();
               }),
               const SizedBox(height: 18),
+              _soundRow(),
+              const SizedBox(height: 12),
               _qualityRow(),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _soundRow() {
+    final audio = game.audio;
+    return Column(
+      children: [
+        _chipBtn(
+          'SOUND: ${audio.muted ? 'OFF' : 'ON'}',
+          selected: !audio.muted,
+          onTap: () => setState(() => audio.toggleMute()),
+        ),
+        const SizedBox(height: 6),
+        _volumeSlider('MUSIC', audio.musicVolume,
+            (v) => setState(() => audio.setMusicVolume(v))),
+        _volumeSlider('SFX', audio.sfxVolume,
+            (v) => setState(() => audio.setSfxVolume(v))),
+      ],
+    );
+  }
+
+  Widget _volumeSlider(
+      String label, double value, ValueChanged<double> onChanged) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 44,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Orbitron',
+              fontSize: 8,
+              color: Color(0x8800F3FF),
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 140,
+          height: 28,
+          child: SliderTheme(
+            data: SliderThemeData(
+              activeTrackColor: const Color(0xFF00F3FF),
+              inactiveTrackColor: const Color(0x3300F3FF),
+              thumbColor: const Color(0xFF00F3FF),
+              overlayShape: SliderComponentShape.noOverlay,
+              trackHeight: 2,
+              thumbShape:
+                  const RoundSliderThumbShape(enabledThumbRadius: 6),
+            ),
+            child: Slider(value: value, onChanged: onChanged),
+          ),
+        ),
+      ],
     );
   }
 
