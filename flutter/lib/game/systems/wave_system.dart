@@ -19,6 +19,9 @@ class WaveSystem extends Component with HasGameReference {
   int totalEnemies = 0;
   int enemiesSpawned = 0;
 
+  /// Actual composition of the running wave (JS currentWaveDistribution).
+  Map<EnemyType, int>? currentWaveDistribution;
+
   final rng = Random();
 
   WaveSystem(this.gameWorld);
@@ -166,8 +169,14 @@ class WaveSystem extends Component with HasGameReference {
     }
 
     totalEnemies = spawnQueue.length;
+    currentWaveDistribution = <EnemyType, int>{};
+    for (final t in spawnQueue) {
+      currentWaveDistribution![t] = (currentWaveDistribution![t] ?? 0) + 1;
+    }
     g.audio.playBuild(); // JS plays 'build' on wave start
     g.saveSystem.save(); // JS saves on wave start
+    g.tutorial.onWaveStarted();
+    g.hints.maybeShowCameraHint();
   }
 
   void _endWave() {

@@ -32,6 +32,9 @@ class GameState {
   /// Transient HUD toast (quality governor notifications).
   final ValueNotifier<String?> toast = ValueNotifier(null);
 
+  /// Wave Intelligence panel visibility (JS toggleWavePanel).
+  final ValueNotifier<bool> waveIntelOpen = ValueNotifier(false);
+
   void startShake(double amount) {
     if (amount > shakeAmount) shakeAmount = amount;
   }

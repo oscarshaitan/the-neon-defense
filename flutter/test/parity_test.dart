@@ -6,6 +6,7 @@ import 'package:neon_defense/game/entities/towers/tower.dart';
 import 'package:neon_defense/game/systems/pathfinding/rift_generator.dart';
 import 'package:neon_defense/game/systems/placement_system.dart';
 import 'package:neon_defense/game/systems/spatial_grid.dart';
+import 'package:neon_defense/game/systems/wave_intel.dart';
 import 'package:neon_defense/game/world/hardpoint_manager.dart';
 
 void main() {
@@ -95,6 +96,60 @@ void main() {
       expect(5 + (1 * 2.5).floor(), 7);
       expect(5 + (10 * 2.5).floor(), 30);
       expect(5 + (25 * 2.5).floor(), 67);
+    });
+  });
+
+  group('Wave Intel parity (JS 03_abilities.js)', () {
+    test('distributeByWeights uses largest-remainder rounding', () {
+      // 10 split 0.7/0.3 -> exactly 7/3
+      final even = distributeByWeights(10, [
+        (type: EnemyType.basic, weight: 0.7),
+        (type: EnemyType.fast, weight: 0.3),
+      ]);
+      expect(even[EnemyType.basic], 7);
+      expect(even[EnemyType.fast], 3);
+
+      // 12 split 0.75/0.2/0.05 -> raw 9.0/2.4/0.6; leftover 1 goes to the
+      // largest fractional remainder (0.6 -> tank).
+      final split = distributeByWeights(12, [
+        (type: EnemyType.basic, weight: 0.75),
+        (type: EnemyType.fast, weight: 0.2),
+        (type: EnemyType.tank, weight: 0.05),
+      ]);
+      expect(split[EnemyType.basic], 9);
+      expect(split[EnemyType.fast], 2);
+      expect(split[EnemyType.tank], 1);
+      expect(split.values.reduce((a, b) => a + b), 12);
+    });
+
+    test('predicted distribution matches JS wave brackets', () {
+      // Wave 1: all basic, 7 enemies.
+      final w1 = getPredictedWaveDistribution(1);
+      expect(w1[EnemyType.basic], 7);
+
+      // Wave 5: fixed 2 tanks + 0.75/0.2/0.05 split of the rest.
+      final w5 = getPredictedWaveDistribution(5);
+      expect(w5.values.reduce((a, b) => a + b), 5 + (5 * 2.5).floor());
+      expect(w5[EnemyType.tank], greaterThanOrEqualTo(2));
+
+      // Wave 10: boss appended on every 10th wave.
+      final w10 = getPredictedWaveDistribution(10);
+      expect(w10[EnemyType.boss], 1);
+      expect(w10.values.reduce((a, b) => a + b), 31);
+
+      // Wave 30+: shifters enter the table.
+      final w30 = getPredictedWaveDistribution(30);
+      expect(w30[EnemyType.shifter], greaterThan(0));
+    });
+
+    test('threat tags follow JS thresholds', () {
+      final tags20 = getWaveIntelTags(20, 0, 0, 1);
+      expect(tags20.map((t) => t.label),
+          containsAll(['BOSS', 'TAUNT', 'MUT_EVENT']));
+      final tags55 = getWaveIntelTags(55, 2, 1, 3);
+      expect(
+          tags55.map((t) => t.label),
+          containsAll(['SURPRISE_BOSS', 'TAUNT', 'STEALTH', 'MUTx1', 'T3']));
     });
   });
 }

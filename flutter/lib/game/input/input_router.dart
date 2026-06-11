@@ -35,12 +35,14 @@ class InputRouter {
     final tower = _towerAt(worldPos);
     if (tower != null) {
       game.selection.selectTower(tower);
+      game.hints.maybeShowTowerHint();
       return;
     }
 
     final rift = _riftAt(worldPos);
     if (rift != null) {
       game.selection.selectRift(rift);
+      game.hints.maybeShowRiftHint();
       return;
     }
 
@@ -61,6 +63,7 @@ class InputRouter {
         return;
       }
       game.selection.selectBuildTarget(snap);
+      game.tutorial.onBuildTargetSelected();
       return;
     }
 

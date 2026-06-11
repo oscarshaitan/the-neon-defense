@@ -125,6 +125,11 @@ class AbilitySystem extends Component {
     // Pause/phase gating is centralized in GameWorld.updateTree.
     // Energy: JS gives +1 per kill only (no passive regen). See enemy.dart _die().
 
+    // JS maybeShowAbilityHint: surface the hint once an ability is usable.
+    if (empReady || overclockReady) {
+      gameWorld.game.hints.maybeShowAbilityHint();
+    }
+
     // Cooldown tick (decrements every 60 frames)
     _cooldownTick++;
     if (_cooldownTick >= 60) {

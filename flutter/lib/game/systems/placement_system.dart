@@ -135,6 +135,7 @@ class PlacementSystem {
     game.selection.selectTower(tower);
     game.audio.playBuild();
     game.saveSystem.save(); // JS saves on build
+    game.tutorial.onTowerBuilt();
     return tower;
   }
 

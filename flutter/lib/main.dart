@@ -10,8 +10,10 @@ import 'ui/screens/game_over_screen.dart';
 import 'ui/hud/stats_bar.dart';
 import 'ui/hud/tower_bar.dart';
 import 'ui/hud/abilities_bar.dart';
+import 'ui/overlays/tutorial_overlay.dart';
 import 'ui/panels/selection_panel.dart';
 import 'ui/panels/pause_menu.dart';
+import 'ui/panels/wave_intel_panel.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,9 +64,10 @@ class _GamePageState extends State<_GamePage> {
 
   void _onKey(KeyEvent event) {
     if (event is KeyDownEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.keyP ||
-          event.logicalKey == LogicalKeyboardKey.escape) {
+      if (event.logicalKey == LogicalKeyboardKey.keyP) {
         _game.togglePause();
+      } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+        _game.handleEscape(); // two-stage: deselect, then pause
       } else {
         _game.handleKeyDown(event.logicalKey);
       }
@@ -142,6 +145,47 @@ class _QualityToast extends StatelessWidget {
   }
 }
 
+/// Single-line onboarding hint (JS inline-hint): 3.6 s display.
+class _HintBanner extends StatelessWidget {
+  final NeonDefenseGame game;
+  const _HintBanner({required this.game});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: game.hints,
+      builder: (_, child) {
+        final hint = game.hints.activeHint;
+        if (hint == null) return const SizedBox.shrink();
+        return SafeArea(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 116),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xE6050510),
+                border: Border.all(color: const Color(0x8800F3FF), width: 1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                hint,
+                style: const TextStyle(
+                  fontFamily: 'Orbitron',
+                  fontSize: 9,
+                  color: Color(0xCCE6FCFF),
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _HudLayer extends StatefulWidget {
   final NeonDefenseGame game;
   const _HudLayer({required this.game});
@@ -176,11 +220,14 @@ class _HudLayerState extends State<_HudLayer> {
         StatsBar(game: game),
         TowerBar(game: game),
         AbilitiesBar(game: game),
+        WaveIntelPanel(game: game),
         _QualityToast(game: game),
+        _HintBanner(game: game),
         ListenableBuilder(
           listenable: game.selection,
           builder: (_, child) => SelectionPanel(game: game),
         ),
+        TutorialOverlay(game: game),
         // Recenter button — bottom-right circle, matches JS #recenter-btn
         SafeArea(
           child: Align(

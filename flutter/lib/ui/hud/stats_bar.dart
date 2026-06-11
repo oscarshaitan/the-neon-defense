@@ -33,7 +33,12 @@ class StatsBar extends StatelessWidget {
               children: [
                 // Left: Wave + Lives
                 Row(mainAxisSize: MainAxisSize.min, children: [
-                  _stat('WAVE', '${state.wave.value}'),
+                  // JS: tapping the wave counter opens Wave Intel.
+                  GestureDetector(
+                    onTap: () => game.state.waveIntelOpen.value =
+                        !game.state.waveIntelOpen.value,
+                    child: _stat('WAVE', '${state.wave.value}'),
+                  ),
                   const SizedBox(width: 20),
                   _stat('LIVES', '${state.lives.value}'),
                 ]),

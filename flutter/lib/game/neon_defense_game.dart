@@ -10,8 +10,11 @@ import 'input/input_router.dart';
 import 'state/entity_registry.dart';
 import 'state/game_state.dart';
 import 'state/selection_state.dart';
+import 'systems/ability_system.dart';
+import 'systems/hint_system.dart';
 import 'systems/placement_system.dart';
 import 'systems/save_system.dart';
+import 'systems/tutorial_system.dart';
 
 class NeonDefenseGame extends FlameGame
     with ScaleDetector, HasKeyboardHandlerComponents, TapCallbacks {
@@ -21,6 +24,8 @@ class NeonDefenseGame extends FlameGame
   late SaveSystem saveSystem;
   late InputRouter inputRouter;
   late PlacementSystem placement;
+  late TutorialSystem tutorial;
+  late HintSystem hints;
 
   final GameState state = GameState();
   final SelectionState selection = SelectionState();
@@ -58,6 +63,11 @@ class NeonDefenseGame extends FlameGame
     placement = PlacementSystem(this);
 
     saveSystem = SaveSystem(this);
+    tutorial = TutorialSystem(this);
+    hints = HintSystem(this);
+    await tutorial.loadCompletionFlag();
+    await hints.loadSeen();
+    state.playerName = await saveSystem.loadPlayerName();
     await audio.init();
     camera = gameCamera.cameraComponent;
     world.add(gameWorld);
@@ -120,12 +130,58 @@ class NeonDefenseGame extends FlameGame
       case LogicalKeyboardKey.keyR:
         chooseTowerType(TowerType.arc);
         break;
-      case LogicalKeyboardKey.escape:
-        selection.clear();
+      case LogicalKeyboardKey.digit1:
+        gameWorld.activateAbility(AbilityType.emp);
+        break;
+      case LogicalKeyboardKey.digit2:
+        gameWorld.activateAbility(AbilityType.overclock);
+        break;
+      case LogicalKeyboardKey.keyU:
+        upgradeSelectedTower();
+        break;
+      case LogicalKeyboardKey.delete:
+      case LogicalKeyboardKey.backspace:
+        sellSelectedTower();
         break;
       default:
         break;
     }
+  }
+
+  /// Esc is two-stage like JS: first clears any selection, then pauses.
+  void handleEscape() {
+    if (selection.selectedTower != null ||
+        selection.selectedRift != null ||
+        selection.selectedBase ||
+        selection.buildTarget != null ||
+        selection.selectedTowerType != null ||
+        gameWorld.abilitySystem.isTargeting) {
+      gameWorld.abilitySystem.cancelTargeting();
+      selection.clear();
+      return;
+    }
+    togglePause();
+  }
+
+  void upgradeSelectedTower() {
+    final tower = selection.selectedTower;
+    if (tower == null) return;
+    if (state.money.value < tower.upgradeCost) return;
+    state.money.value -= tower.upgradeCost;
+    tower.upgrade();
+    gameWorld.particles.createParticles(
+        tower.position.x, tower.position.y, const Color(0xFF00FF41), 15);
+    saveSystem.save(); // JS saves on upgrade
+  }
+
+  void sellSelectedTower() {
+    final tower = selection.selectedTower;
+    if (tower == null) return;
+    state.money.value += tower.sellValue;
+    gameWorld.particles.createParticles(
+        tower.position.x, tower.position.y, const Color(0xFFFFFFFF), 10);
+    gameWorld.removeTower(tower);
+    saveSystem.save(); // JS saves on sell
   }
 
   /// JS window.selectTower (04_tutorial.js:768-786): with a build target
@@ -157,6 +213,7 @@ class NeonDefenseGame extends FlameGame
     overlays.remove('startScreen');
     overlays.add('hud');
     gameWorld.startPrepPhase();
+    tutorial.maybeStart();
   }
 
   /// CONTINUE from the start screen: restore the save, then enter a prep
