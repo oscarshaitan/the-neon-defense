@@ -40,6 +40,11 @@ class _PauseMenuState extends State<PauseMenu> {
               const SizedBox(height: 24),
               _menuBtn('RESUME', const Color(0xFF00F3FF), game.togglePause),
               const SizedBox(height: 10),
+              _menuBtn('SAVE', const Color(0xFF00FF41), () {
+                game.saveSystem.save();
+                game.state.toast.value = 'GAME SAVED';
+              }),
+              const SizedBox(height: 10),
               _menuBtn('RESET', const Color(0xFFFF00AC), () {
                 game.overlays.remove('pauseMenu');
                 game.resetGame();

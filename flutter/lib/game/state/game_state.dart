@@ -18,6 +18,8 @@ class GameState {
 
   final Map<EnemyType, int> totalKills = {};
 
+  String? playerName;
+
   /// Fixed-step frame counter — JS effects key off `frameCount`
   /// (e.g. spawn pulses use sin(frameCount * 0.1)). Incremented once per
   /// 60 Hz logic step while playing, frozen on pause like the JS loop.

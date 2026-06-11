@@ -250,6 +250,7 @@ class SelectionPanel extends StatelessWidget {
     tower.upgrade();
     game.gameWorld.particles.createParticles(
         tower.position.x, tower.position.y, const Color(0xFF00FF41), 15);
+    game.saveSystem.save(); // JS saves on upgrade
   }
 
   void _sell(Tower tower) {
@@ -257,5 +258,6 @@ class SelectionPanel extends StatelessWidget {
     game.gameWorld.particles.createParticles(
         tower.position.x, tower.position.y, const Color(0xFFFFFFFF), 10);
     game.gameWorld.removeTower(tower);
+    game.saveSystem.save(); // JS saves on sell
   }
 }

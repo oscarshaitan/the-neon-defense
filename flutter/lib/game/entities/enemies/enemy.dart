@@ -156,6 +156,7 @@ class Enemy extends PositionComponent
     if (type == EnemyType.splitter) {
       game.gameWorld.spawnMinis(this);
     }
+    game.saveSystem.queueAutoSave(); // JS batches combat saves
     removeFromParent();
   }
 

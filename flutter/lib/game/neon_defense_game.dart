@@ -71,6 +71,8 @@ class NeonDefenseGame extends FlameGame
     }
     // Drop time we can't catch up on (avoids spiral of death after jank).
     if (_accumulator >= _step) _accumulator = 0;
+
+    if (state.isPlaying) saveSystem.flushQueuedAutoSave();
   }
 
   @override
@@ -141,7 +143,23 @@ class NeonDefenseGame extends FlameGame
     gameWorld.startPrepPhase();
   }
 
+  /// CONTINUE from the start screen: restore the save, then enter a prep
+  /// phase (JS loadGame).
+  Future<void> continueGame() async {
+    final loaded = await saveSystem.load();
+    if (!loaded) {
+      startGame();
+      return;
+    }
+    state.phase.value = GamePhase.playing;
+    overlays.remove('startScreen');
+    overlays.add('hud');
+    gameCamera.resetCamera();
+  }
+
   void gameOver() {
+    saveSystem.flushQueuedAutoSave(force: true);
+    saveSystem.save(); // JS saves on game over
     state.phase.value = GamePhase.gameover;
     overlays.remove('hud');
     overlays.add('gameOverScreen');

@@ -1,12 +1,30 @@
 import 'package:flutter/material.dart';
 import '../../game/neon_defense_game.dart';
 
-class StartScreen extends StatelessWidget {
+/// Start screen. With existing save data it offers CONTINUE / NEW GAME
+/// (JS start screen + loadGame, 01_init.js:13-22).
+class StartScreen extends StatefulWidget {
   final NeonDefenseGame game;
   const StartScreen({super.key, required this.game});
 
   @override
+  State<StartScreen> createState() => _StartScreenState();
+}
+
+class _StartScreenState extends State<StartScreen> {
+  bool _hasSave = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.game.saveSystem.hasSave().then((value) {
+      if (mounted) setState(() => _hasSave = value);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final game = widget.game;
     return Scaffold(
       backgroundColor: const Color(0xFF050510),
       body: Center(
@@ -37,10 +55,35 @@ class StartScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 60),
-            _NeonButton(
-              label: 'INITIATE',
-              onPressed: game.startGame,
-            ),
+            if (_hasSave) ...[
+              const Text(
+                'SAVE DATA FOUND',
+                style: TextStyle(
+                  fontFamily: 'Orbitron',
+                  fontSize: 10,
+                  color: Color(0xFF00FF41),
+                  letterSpacing: 3,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _NeonButton(
+                label: 'CONTINUE',
+                color: const Color(0xFF00FF41),
+                onPressed: () => game.continueGame(),
+              ),
+              const SizedBox(height: 12),
+              _NeonButton(
+                label: 'NEW GAME',
+                onPressed: () async {
+                  await game.saveSystem.clearSave();
+                  game.startGame();
+                },
+              ),
+            ] else
+              _NeonButton(
+                label: 'INITIATE',
+                onPressed: game.startGame,
+              ),
           ],
         ),
       ),
@@ -51,16 +94,22 @@ class StartScreen extends StatelessWidget {
 class _NeonButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
-  const _NeonButton({required this.label, required this.onPressed});
+  final Color color;
+  const _NeonButton({
+    required this.label,
+    required this.onPressed,
+    this.color = const Color(0xFF00F3FF),
+  });
 
   @override
   Widget build(BuildContext context) {
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: Color(0xFF00F3FF), width: 1.5),
+        side: BorderSide(color: color, width: 1.5),
         padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-        foregroundColor: const Color(0xFF00F3FF),
+        foregroundColor: color,
+        minimumSize: const Size(220, 0),
       ),
       child: Text(
         label,

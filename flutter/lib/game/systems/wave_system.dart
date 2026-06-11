@@ -164,6 +164,7 @@ class WaveSystem extends Component with HasGameReference {
     }
 
     totalEnemies = spawnQueue.length;
+    g.saveSystem.save(); // JS saves on wave start
   }
 
   void _endWave() {
@@ -171,6 +172,7 @@ class WaveSystem extends Component with HasGameReference {
     g.state.isWaveActive.value = false;
     g.state.wave.value++;
     startPrepPhase();
+    g.saveSystem.save(); // JS saves on wave completion
   }
 
   /// JS spawnEnemy (05_loop.js:812-873): wave HP scaling, then rift tier

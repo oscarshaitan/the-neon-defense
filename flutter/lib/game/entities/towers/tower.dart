@@ -17,7 +17,7 @@ class Tower extends PositionComponent
   double damage;
   double range;
   int cooldown; // current cooldown counter (counts down)
-  final int maxCooldown;
+  int maxCooldown; // mutable so saves can restore it
   final Color color;
   final double baseCost;
   double totalCost;
