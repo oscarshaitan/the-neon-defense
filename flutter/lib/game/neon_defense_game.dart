@@ -55,6 +55,13 @@ class NeonDefenseGame extends FlameGame
       gameWorld.qualityGovernor.recordFrameMs(dt * 1000);
     }
 
+    // Screen shake decays per render frame (JS draw()).
+    if (state.shakeAmount > 0) {
+      state.shakeAmount *= 0.9;
+      if (state.shakeAmount < 0.1) state.shakeAmount = 0;
+    }
+    gameCamera.applyShake(state.shakeAmount);
+
     _accumulator += dt;
     var steps = 0;
     while (_accumulator >= _step && steps < _maxStepsPerFrame) {

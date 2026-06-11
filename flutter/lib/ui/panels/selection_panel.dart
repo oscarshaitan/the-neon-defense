@@ -248,10 +248,14 @@ class SelectionPanel extends StatelessWidget {
     if (game.state.money.value < tower.upgradeCost) return;
     game.state.money.value -= tower.upgradeCost;
     tower.upgrade();
+    game.gameWorld.particles.createParticles(
+        tower.position.x, tower.position.y, const Color(0xFF00FF41), 15);
   }
 
   void _sell(Tower tower) {
     game.state.money.value += tower.sellValue;
+    game.gameWorld.particles.createParticles(
+        tower.position.x, tower.position.y, const Color(0xFFFFFFFF), 10);
     game.gameWorld.removeTower(tower);
   }
 }

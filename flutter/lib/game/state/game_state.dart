@@ -23,6 +23,17 @@ class GameState {
   /// 60 Hz logic step while playing, frozen on pause like the JS loop.
   int frameCount = 0;
 
+  /// Screen shake (JS startShake/decay, 00_core.js:268-273): new impulses
+  /// keep the larger amount; decays x0.9 per render frame.
+  double shakeAmount = 0;
+
+  /// Transient HUD toast (quality governor notifications).
+  final ValueNotifier<String?> toast = ValueNotifier(null);
+
+  void startShake(double amount) {
+    if (amount > shakeAmount) shakeAmount = amount;
+  }
+
   double get maxEnergy => kMaxEnergy;
 
   bool get isPlaying => phase.value == GamePhase.playing && !isPaused.value;
@@ -44,5 +55,6 @@ class GameState {
     isPaused.value = false;
     totalKills.clear();
     frameCount = 0;
+    shakeAmount = 0;
   }
 }

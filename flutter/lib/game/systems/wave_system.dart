@@ -220,6 +220,14 @@ class WaveSystem extends Component with HasGameReference {
       spatialGrid: gameWorld.spatialGrid,
     );
     gameWorld.add(enemy);
+    // JS: boss spawns flash a big orange light (r150 #ff8800).
+    if (type == EnemyType.boss) {
+      gameWorld.lights.emit(
+          x: enemy.position.x,
+          y: enemy.position.y,
+          radius: 150,
+          color: const Color(0xFFFF8800));
+    }
     enemiesSpawned++;
   }
 

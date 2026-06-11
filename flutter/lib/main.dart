@@ -95,6 +95,53 @@ class _GamePageState extends State<_GamePage> {
 /// has no notifier (prep countdown, enemy count, ability cooldowns) is
 /// refreshed by a single low-rate timer (~6 frames, matching the JS
 /// UI_SYNC_INTERVAL_FRAMES) instead of a per-frame setState ticker.
+/// Transient toast for quality-governor notifications
+/// (JS showQualityToast). Auto-hides after ~2.4 s.
+class _QualityToast extends StatelessWidget {
+  final NeonDefenseGame game;
+  const _QualityToast({required this.game});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: game.state.toast,
+      builder: (_, message, child) {
+        if (message == null) return const SizedBox.shrink();
+        Future.delayed(const Duration(milliseconds: 2400), () {
+          if (game.state.toast.value == message) {
+            game.state.toast.value = null;
+          }
+        });
+        return SafeArea(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Container(
+              margin: const EdgeInsets.only(top: 64),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xE6050510),
+                border:
+                    Border.all(color: const Color(0xFFFCEE0A), width: 1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontFamily: 'Orbitron',
+                  fontSize: 10,
+                  color: Color(0xFFFCEE0A),
+                  letterSpacing: 2,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _HudLayer extends StatefulWidget {
   final NeonDefenseGame game;
   const _HudLayer({required this.game});
@@ -129,6 +176,7 @@ class _HudLayerState extends State<_HudLayer> {
         StatsBar(game: game),
         TowerBar(game: game),
         AbilitiesBar(game: game),
+        _QualityToast(game: game),
         ListenableBuilder(
           listenable: game.selection,
           builder: (_, child) => SelectionPanel(game: game),

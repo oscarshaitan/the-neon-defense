@@ -1,3 +1,5 @@
+import 'dart:ui' show Color;
+
 import 'package:flame/components.dart';
 
 import '../config/constants.dart';
@@ -104,7 +106,14 @@ class PlacementSystem {
   /// selected for instant upgrades.
   Tower? buildTower(Vector2 worldPos, TowerType type) {
     final validation = validate(worldPos, type);
-    if (!validation.valid) return null;
+    if (!validation.valid) {
+      // JS buildTower: red burst on path/tower collisions.
+      if (validation.reason == 'path' || validation.reason == 'tower') {
+        game.gameWorld.particles.createParticles(
+            validation.snap.x, validation.snap.y, const Color(0xFFFF0000), 5);
+      }
+      return null;
+    }
 
     final hp = validation.hardpoint;
     if (hp != null && hp.occupied) return null;
@@ -118,6 +127,9 @@ class PlacementSystem {
       hardpoint: hp,
     );
     game.gameWorld.add(tower);
+
+    game.gameWorld.particles.createParticles(
+        validation.snap.x, validation.snap.y, kTowers[type]!.color, 5);
 
     // Quick flow: keep the newly built tower selected (JS selectPlacedTower).
     game.selection.selectTower(tower);

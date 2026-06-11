@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 
@@ -13,6 +15,8 @@ class GameCamera {
   static const double _maxZoom = 1.0;
 
   bool _isScaling = false;
+  final _shakeRng = Random();
+  final Vector2 _shakeApplied = Vector2.zero();
 
   GameCamera(this.game) {
     cameraComponent = CameraComponent(world: game.world)
@@ -46,6 +50,21 @@ class GameCamera {
 
   void onScaleEnd(ScaleEndInfo info) {
     _isScaling = false;
+  }
+
+  /// JS draw() applies a random +-shake/2 screen-space jitter each frame
+  /// (06_render.js:100-102). Implemented as a transient viewfinder offset.
+  void applyShake(double amount) {
+    cameraComponent.viewfinder.position -= _shakeApplied;
+    if (amount > 0) {
+      _shakeApplied.setValues(
+        (_shakeRng.nextDouble() - 0.5) * amount / _zoom,
+        (_shakeRng.nextDouble() - 0.5) * amount / _zoom,
+      );
+      cameraComponent.viewfinder.position += _shakeApplied;
+    } else {
+      _shakeApplied.setZero();
+    }
   }
 
   // ---------------------------------------------------------------------------

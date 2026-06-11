@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 import '../../config/constants.dart';
 import '../../neon_defense_game.dart';
 import '../../systems/spatial_grid.dart';
+import '../../vfx/render_utils.dart';
 import '../enemies/enemy.dart';
 import '../projectiles/projectile.dart';
 
@@ -53,6 +54,8 @@ class CoreBase extends PositionComponent
     if (game.state.money.value < cost) return false;
     game.state.money.value -= cost;
     game.state.lives.value += 2;
+    game.gameWorld.particles.createParticles(
+        position.x, position.y, const Color(0xFF00FF41), 20); // green heal
     return true;
   }
 
@@ -64,6 +67,8 @@ class CoreBase extends PositionComponent
     game.state.money.value -= cost;
     level++;
     level++;
+    game.gameWorld.particles.createParticles(
+        position.x, position.y, const Color(0xFF00F3FF), 30); // blue upgrade
     return true;
   }
 
@@ -101,7 +106,34 @@ class CoreBase extends PositionComponent
   void render(Canvas canvas) {
     const r = 18.0;
 
-    // Glow layer
+    // Selection ring + range indicator (JS 06_render.js:260-279).
+    if (game.selection.selectedBase) {
+      drawDashedCircle(
+        canvas,
+        Offset.zero,
+        40,
+        Paint()
+          ..color = _green
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+        5,
+        5,
+      );
+      if (level > 0) {
+        canvas.drawCircle(
+            Offset.zero, currentRange, Paint()..color = const Color(0x1A00FF41));
+        canvas.drawCircle(
+          Offset.zero,
+          currentRange,
+          Paint()
+            ..color = const Color(0x4D00FF41)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1,
+        );
+      }
+    }
+
+    // Glow layer + solid green diamond — matches JS exactly.
     canvas.drawPath(
       _diamond(r),
       Paint()
@@ -109,8 +141,6 @@ class CoreBase extends PositionComponent
         ..style = PaintingStyle.fill
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
     );
-
-    // Solid green diamond — matches JS exactly
     canvas.drawPath(
       _diamond(r),
       Paint()
@@ -118,18 +148,66 @@ class CoreBase extends PositionComponent
         ..style = PaintingStyle.fill,
     );
 
-    // Level indicator pips
+    // Turret visuals: rotating hex shield layers + orbiting drones
+    // (JS 06_render.js:294-341).
     if (level > 0) {
-      for (int i = 0; i < level; i++) {
-        final angle = -pi / 2 + i * (2 * pi / 10);
-        final pr = r * 1.8;
-        canvas.drawCircle(
-          Offset(pr * cos(angle), pr * sin(angle)),
-          2.5,
-          Paint()..color = _green,
+      final time = DateTime.now().millisecondsSinceEpoch / 800;
+
+      final shieldLayers = max(1, level ~/ 3);
+      for (var j = 0; j < shieldLayers; j++) {
+        final radius = 22.0 + j * 4;
+        final dir = j.isEven ? 1.0 : -1.0;
+        final path = Path();
+        for (var i = 0; i < 6; i++) {
+          final angle = (pi / 3) * i + time * dir;
+          final hx = cos(angle) * radius;
+          final hy = sin(angle) * radius;
+          if (i == 0) {
+            path.moveTo(hx, hy);
+          } else {
+            path.lineTo(hx, hy);
+          }
+        }
+        path.close();
+        canvas.drawPath(
+          path,
+          Paint()
+            ..color = _green.withValues(alpha: (0.3 + j * 0.2).clamp(0, 1))
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
+        );
+      }
+
+      // Orbiting defense drones — triangles in two orbits (r32 / r45).
+      final dronePaint = Paint()..color = const Color(0xFFFFFFFF);
+      for (var i = 0; i < level; i++) {
+        final orbitIndex = i < 5 ? 0 : 1;
+        final orbitCount = i < 5 ? min(level, 5) : level - 5;
+        final orbitPos = i < 5 ? i : i - 5;
+
+        final radius = orbitIndex == 0 ? 32.0 : 45.0;
+        final orbitTime = orbitIndex == 0 ? time * 2 : -time * 1.5;
+        final angle = orbitTime + (orbitPos * (pi * 2 / orbitCount));
+        final ox = cos(angle) * radius;
+        final oy = sin(angle) * radius;
+
+        canvas.drawPath(
+          Path()
+            ..moveTo(ox + cos(angle) * 5, oy + sin(angle) * 5)
+            ..lineTo(ox + cos(angle + 2.5) * 5, oy + sin(angle + 2.5) * 5)
+            ..lineTo(ox + cos(angle - 2.5) * 5, oy + sin(angle - 2.5) * 5)
+            ..close(),
+          dronePaint,
         );
       }
     }
+
+    // Core pulsing effect (JS: alpha 0.5 + sin(t/200) * 0.3).
+    final pulseAlpha =
+        (0.5 + sin(DateTime.now().millisecondsSinceEpoch / 200) * 0.3)
+            .clamp(0.0, 1.0);
+    canvas.drawCircle(Offset.zero, 8,
+        Paint()..color = Color.fromRGBO(255, 255, 255, pulseAlpha));
   }
 
   static Path _diamond(double r) {

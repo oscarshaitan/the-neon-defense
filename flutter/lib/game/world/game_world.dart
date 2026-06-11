@@ -1,3 +1,5 @@
+import 'dart:ui' show Color;
+
 import 'package:flame/components.dart';
 
 import '../neon_defense_game.dart';
@@ -177,6 +179,8 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
     for (final t in doomed) {
       game.state.money.value +=
           (t.baseCost * t.level * 0.7).floorToDouble();
+      particles.createParticles(
+          t.position.x, t.position.y, const Color(0xFFFFFFFF), 10);
       removeTower(t);
     }
   }

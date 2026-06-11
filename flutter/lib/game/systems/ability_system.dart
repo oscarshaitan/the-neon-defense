@@ -78,6 +78,12 @@ class AbilitySystem extends Component {
       }
     }
 
+    // JS EMP effects: cyan burst + big light flash.
+    gameWorld.particles
+        .createParticles(worldPos.x, worldPos.y, const Color(0xFF00F3FF), 20);
+    gameWorld.lights.emit(
+        x: worldPos.x, y: worldPos.y, radius: 250, color: const Color(0xFF00F3FF));
+
     empCooldownTimer = kEmpMaxCooldown;
     empState = AbilityState.cooldown;
   }
@@ -103,6 +109,8 @@ class AbilitySystem extends Component {
     g.state.energy.value -= kOverclockCost;
     nearest.overclocked = true;
     nearest.overclockTimer = kOverclockDurationFrames;
+    gameWorld.particles.createParticles(
+        nearest.position.x, nearest.position.y, const Color(0xFFFCEE0A), 15);
 
     overclockCooldownTimer = kOverclockMaxCooldown;
     overclockState = AbilityState.cooldown;
