@@ -1,17 +1,17 @@
 import 'dart:math';
 import 'dart:ui';
 import 'package:flame/components.dart';
-import 'package:flame/events.dart';
 
 import '../../config/constants.dart';
 import '../../neon_defense_game.dart';
 import '../../systems/spatial_grid.dart';
+import '../../world/game_world.dart' show RenderLayers;
 import '../../world/hardpoint_manager.dart';
 import '../enemies/enemy.dart';
 import '../projectiles/projectile.dart';
 
 class Tower extends PositionComponent
-    with TapCallbacks, HasGameReference<NeonDefenseGame> {
+    with HasGameReference<NeonDefenseGame> {
   final TowerType type;
   double damage;
   double range;
@@ -61,7 +61,20 @@ class Tower extends PositionComponent
           position: position,
           size: Vector2.all(kGridSize * (hardpoint?.scaleMult ?? 1.0)),
           anchor: Anchor.center,
+          priority: RenderLayers.towers,
         );
+
+  @override
+  void onMount() {
+    super.onMount();
+    game.entities.towers.add(this);
+  }
+
+  @override
+  void onRemove() {
+    game.entities.towers.remove(this);
+    super.onRemove();
+  }
 
   @override
   void update(double dt) {
@@ -211,11 +224,5 @@ class Tower extends PositionComponent
     }
     path.close();
     canvas.drawPath(path, Paint()..color = c);
-  }
-
-  @override
-  void onTapDown(TapDownEvent event) {
-    game.selectTower(this);
-    event.handled = true;
   }
 }

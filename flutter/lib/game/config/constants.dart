@@ -195,7 +195,6 @@ const double kStartingMoney = 100.0;
 const int kStartingLives = 20;
 const double kStartingEnergy = 0.0;
 const double kMaxEnergy = 100.0;
-const double kEnergyRegenPerFrame = 0.05;
 
 // ---------------------------------------------------------------------------
 // Abilities

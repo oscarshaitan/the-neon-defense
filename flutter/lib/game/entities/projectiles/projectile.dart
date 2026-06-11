@@ -1,9 +1,12 @@
 import 'dart:ui';
 import 'package:flame/components.dart';
 
-import '../../entities/enemies/enemy.dart';
+import '../../neon_defense_game.dart';
+import '../../world/game_world.dart' show RenderLayers;
+import '../enemies/enemy.dart';
 
-class Projectile extends PositionComponent {
+class Projectile extends PositionComponent
+    with HasGameReference<NeonDefenseGame> {
   final Enemy target;
   final double damage;
   final double speed; // world units per frame
@@ -15,7 +18,24 @@ class Projectile extends PositionComponent {
     required this.damage,
     required this.speed,
     required this.color,
-  }) : super(position: startPos.clone(), size: Vector2.all(4), anchor: Anchor.center);
+  }) : super(
+          position: startPos.clone(),
+          size: Vector2.all(4),
+          anchor: Anchor.center,
+          priority: RenderLayers.projectiles,
+        );
+
+  @override
+  void onMount() {
+    super.onMount();
+    game.entities.projectiles.add(this);
+  }
+
+  @override
+  void onRemove() {
+    game.entities.projectiles.remove(this);
+    super.onRemove();
+  }
 
   @override
   void update(double dt) {

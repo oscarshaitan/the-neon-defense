@@ -14,7 +14,7 @@ class SelectionPanel extends StatelessWidget {
     final tower = selectedTower;
     if (tower == null) return const SizedBox.shrink();
 
-    final canUpgrade = game.money >= tower.upgradeCost;
+    final canUpgrade = game.state.money.value >= tower.upgradeCost;
 
     // Position at bottom, left of center — matches JS bottom:20px, right:50% + margin
     return SafeArea(
@@ -78,7 +78,7 @@ class SelectionPanel extends StatelessWidget {
               _actionBtn(
                 'CLOSE',
                 const Color(0x66FFFFFF),
-                () => game.selectTower(null),
+                () => game.selection.selectTower(null),
               ),
             ],
           ),
@@ -136,13 +136,13 @@ class SelectionPanel extends StatelessWidget {
   }
 
   void _upgrade(Tower tower) {
-    if (game.money < tower.upgradeCost) return;
-    game.money -= tower.upgradeCost;
+    if (game.state.money.value < tower.upgradeCost) return;
+    game.state.money.value -= tower.upgradeCost;
     tower.upgrade();
   }
 
   void _sell(Tower tower) {
-    game.money += tower.sellValue;
+    game.state.money.value += tower.sellValue;
     game.gameWorld.removeTower(tower);
   }
 }

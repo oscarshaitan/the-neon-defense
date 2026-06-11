@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart';
 
 import 'game/neon_defense_game.dart';
@@ -63,20 +64,10 @@ class _GamePageState extends State<_GamePage> {
     if (event is KeyDownEvent) {
       if (event.logicalKey == LogicalKeyboardKey.keyP ||
           event.logicalKey == LogicalKeyboardKey.escape) {
-        _togglePause();
+        _game.togglePause();
       } else {
         _game.handleKeyDown(event.logicalKey);
       }
-    }
-  }
-
-  void _togglePause() {
-    if (_game.gameState != 'playing') return;
-    _game.isPaused = !_game.isPaused;
-    if (_game.isPaused) {
-      _game.overlays.add('pauseMenu');
-    } else {
-      _game.overlays.remove('pauseMenu');
     }
   }
 
@@ -100,6 +91,10 @@ class _GamePageState extends State<_GamePage> {
   }
 }
 
+/// HUD container. Stat widgets subscribe to GameState notifiers; data that
+/// has no notifier (prep countdown, enemy count, ability cooldowns) is
+/// refreshed by a single low-rate timer (~6 frames, matching the JS
+/// UI_SYNC_INTERVAL_FRAMES) instead of a per-frame setState ticker.
 class _HudLayer extends StatefulWidget {
   final NeonDefenseGame game;
   const _HudLayer({required this.game});
@@ -108,20 +103,21 @@ class _HudLayer extends StatefulWidget {
   State<_HudLayer> createState() => _HudLayerState();
 }
 
-class _HudLayerState extends State<_HudLayer>
-    with SingleTickerProviderStateMixin {
-  late final Ticker _ticker;
+class _HudLayerState extends State<_HudLayer> {
+  Timer? _uiSync;
 
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker((_) => setState(() {}));
-    _ticker.start();
+    _uiSync = Timer.periodic(
+      const Duration(milliseconds: 100),
+      (_) => setState(() {}),
+    );
   }
 
   @override
   void dispose() {
-    _ticker.dispose();
+    _uiSync?.cancel();
     super.dispose();
   }
 
@@ -133,7 +129,13 @@ class _HudLayerState extends State<_HudLayer>
         StatsBar(game: game),
         TowerBar(game: game),
         AbilitiesBar(game: game),
-        SelectionPanel(game: game, selectedTower: game.selectedTower),
+        ListenableBuilder(
+          listenable: game.selection,
+          builder: (_, child) => SelectionPanel(
+            game: game,
+            selectedTower: game.selection.selectedTower,
+          ),
+        ),
         // Recenter button — bottom-right circle, matches JS #recenter-btn
         SafeArea(
           child: Align(

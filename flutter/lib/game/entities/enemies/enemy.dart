@@ -2,9 +2,12 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 
 import '../../config/constants.dart';
+import '../../neon_defense_game.dart';
 import '../../systems/spatial_grid.dart';
+import '../../world/game_world.dart' show RenderLayers;
 
-class Enemy extends PositionComponent {
+class Enemy extends PositionComponent
+    with HasGameReference<NeonDefenseGame> {
   final EnemyType type;
   double hp;
   final double maxHp;
@@ -39,7 +42,11 @@ class Enemy extends PositionComponent {
     required this.riftLevel,
     required this.spatialGrid,
   })  : maxHp = hp,
-        super(size: Vector2.all(width), anchor: Anchor.center) {
+        super(
+          size: Vector2.all(width),
+          anchor: Anchor.center,
+          priority: RenderLayers.enemies,
+        ) {
     position = path.isNotEmpty ? path[0].clone() : Vector2.zero();
   }
 
@@ -47,11 +54,13 @@ class Enemy extends PositionComponent {
   void onMount() {
     super.onMount();
     spatialGrid.insert(this);
+    game.entities.enemies.add(this);
   }
 
   @override
   void onRemove() {
     spatialGrid.remove(this);
+    game.entities.enemies.remove(this);
     super.onRemove();
   }
 
@@ -110,19 +119,18 @@ class Enemy extends PositionComponent {
 
   void _die() {
     isDead = true;
-    final game = findGame()! as dynamic;
-    // Award credits + energy (JS: money += reward; energy = Math.min(maxEnergy, energy + 1))
-    game.money += reward;
-    game.energy = (game.energy + 1.0).clamp(0.0, kMaxEnergy);
+    // JS: money += reward; energy = Math.min(maxEnergy, energy + 1)
+    game.state.money.value += reward;
+    game.state.addEnergy(1.0);
+    game.state.recordKill(type);
     removeFromParent();
   }
 
   void _reachCore() {
     reachedCore = true;
-    final game = findGame()!;
-    (game as dynamic).lives -= 1;
-    if ((game as dynamic).lives <= 0) {
-      (game as dynamic).gameOver();
+    game.state.lives.value -= 1;
+    if (game.state.lives.value <= 0) {
+      game.gameOver();
     }
     removeFromParent();
   }

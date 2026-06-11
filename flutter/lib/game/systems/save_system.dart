@@ -23,11 +23,11 @@ class SaveSystem {
   Map<String, dynamic> _buildSnapshot() {
     final gw = game.gameWorld;
     return {
-      'money': game.money,
-      'lives': game.lives,
-      'energy': game.energy,
-      'wave': game.wave,
-      'isWaveActive': game.isWaveActive,
+      'money': game.state.money.value,
+      'lives': game.state.lives.value,
+      'energy': game.state.energy.value,
+      'wave': game.state.wave.value,
+      'isWaveActive': game.state.isWaveActive.value,
       'rifts': gw.waveSystem.rifts
           .map((r) => {
                 'level': r.level,
@@ -57,11 +57,11 @@ class SaveSystem {
   }
 
   void _applySnapshot(Map<String, dynamic> data) {
-    game.money = (data['money'] as num).toDouble();
-    game.lives = data['lives'] as int;
-    game.energy = (data['energy'] as num).toDouble();
-    game.wave = data['wave'] as int;
-    game.isWaveActive = data['isWaveActive'] as bool? ?? false;
+    game.state.money.value = (data['money'] as num).toDouble();
+    game.state.lives.value = data['lives'] as int;
+    game.state.energy.value = (data['energy'] as num).toDouble();
+    game.state.wave.value = data['wave'] as int;
+    game.state.isWaveActive.value = data['isWaveActive'] as bool? ?? false;
 
     final gw = game.gameWorld;
     gw.waveSystem.rifts.clear();

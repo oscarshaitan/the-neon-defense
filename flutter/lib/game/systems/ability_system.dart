@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 
 import '../config/constants.dart';
-import '../entities/enemies/enemy.dart';
 import '../entities/towers/tower.dart';
 import '../world/game_world.dart';
 
@@ -37,13 +36,13 @@ class AbilitySystem extends Component {
   bool get isTargeting => targetingAbility != null;
 
   void startTargeting(AbilityType type) {
-    final g = gameWorld.game;
+    final energy = gameWorld.game.state.energy.value;
     if (type == AbilityType.emp) {
       if (empState != AbilityState.ready) return;
-      if (g.energy < kEmpCost) return;
+      if (energy < kEmpCost) return;
     } else {
       if (overclockState != AbilityState.ready) return;
-      if (g.energy < kOverclockCost) return;
+      if (energy < kOverclockCost) return;
     }
     targetingAbility = type;
   }
@@ -69,11 +68,11 @@ class AbilitySystem extends Component {
 
   void _fireEmp(Vector2 worldPos) {
     final g = gameWorld.game;
-    g.energy -= kEmpCost;
+    g.state.energy.value -= kEmpCost;
     empState = AbilityState.active;
 
     // Freeze all enemies in radius
-    for (final enemy in gameWorld.children.whereType<Enemy>()) {
+    for (final enemy in g.entities.enemies) {
       if (enemy.position.distanceTo(worldPos) <= kEmpRadius) {
         enemy.freeze(kEmpDurationFrames);
       }
@@ -89,7 +88,7 @@ class AbilitySystem extends Component {
     // Find nearest tower to tap position
     Tower? nearest;
     double nearestDist = 80.0; // max snap distance
-    for (final tower in gameWorld.children.whereType<Tower>()) {
+    for (final tower in g.entities.towers) {
       final d = tower.position.distanceTo(worldPos);
       if (d < nearestDist) {
         nearestDist = d;
@@ -101,7 +100,7 @@ class AbilitySystem extends Component {
       return;
     }
 
-    g.energy -= kOverclockCost;
+    g.state.energy.value -= kOverclockCost;
     nearest.overclocked = true;
     nearest.overclockTimer = kOverclockDurationFrames;
 
@@ -115,9 +114,7 @@ class AbilitySystem extends Component {
 
   @override
   void update(double dt) {
-    final g = gameWorld.game;
-    if (g.gameState != 'playing' || g.isPaused) return;
-
+    // Pause/phase gating is centralized in GameWorld.updateTree.
     // Energy: JS gives +1 per kill only (no passive regen). See enemy.dart _die().
 
     // Cooldown tick (decrements every 60 frames)
@@ -219,9 +216,10 @@ class AbilitySystem extends Component {
           : 0.0;
 
   bool get empReady =>
-      empState == AbilityState.ready && gameWorld.game.energy >= kEmpCost;
+      empState == AbilityState.ready &&
+      gameWorld.game.state.energy.value >= kEmpCost;
 
   bool get overclockReady =>
       overclockState == AbilityState.ready &&
-      gameWorld.game.energy >= kOverclockCost;
+      gameWorld.game.state.energy.value >= kOverclockCost;
 }

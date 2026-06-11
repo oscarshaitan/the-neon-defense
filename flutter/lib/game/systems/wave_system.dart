@@ -51,8 +51,8 @@ class WaveSystem extends Component with HasGameReference {
 
   @override
   void update(double dt) {
+    // Pause/phase gating is centralized in GameWorld.updateTree.
     final g = gameWorld.game;
-    if (g.gameState != 'playing' || g.isPaused) return;
 
     if (isPrepPhase) {
       prepTimer -= dt;
@@ -62,7 +62,7 @@ class WaveSystem extends Component with HasGameReference {
       return;
     }
 
-    if (g.isWaveActive) {
+    if (g.state.isWaveActive.value) {
       spawnTimer++;
       if (spawnTimer >= kSpawnIntervalFrames && spawnQueue.isNotEmpty) {
         spawnTimer = 0;
@@ -83,23 +83,24 @@ class WaveSystem extends Component with HasGameReference {
   void _startWave() {
     isPrepPhase = false;
     final g = gameWorld.game;
-    g.isWaveActive = true;
+    g.state.isWaveActive.value = true;
     spawnQueue.clear();
     spawnTimer = 0;
     enemiesSpawned = 0;
 
     // Build spawn queue — matches JS startWave() exactly
-    final count = 5 + (g.wave * 2.5).floor();
+    final wave = g.state.wave.value;
+    final count = 5 + (wave * 2.5).floor();
     for (int i = 0; i < count; i++) {
       EnemyType type;
       final r = _rng.nextDouble();
 
-      if (g.wave < 3) {
+      if (wave < 3) {
         type = EnemyType.basic;
-      } else if (g.wave < 5) {
+      } else if (wave < 5) {
         type = r < 0.3 ? EnemyType.fast : EnemyType.basic;
-      } else if (g.wave < 10) {
-        if (g.wave % 5 == 0 && i < 2) {
+      } else if (wave < 10) {
+        if (wave % 5 == 0 && i < 2) {
           type = EnemyType.tank;
         } else if (r < 0.2) {
           type = EnemyType.fast;
@@ -110,11 +111,11 @@ class WaveSystem extends Component with HasGameReference {
         }
       } else {
         final chance = _rng.nextDouble();
-        if (chance < 0.08 && g.wave >= 30) {
+        if (chance < 0.08 && wave >= 30) {
           type = EnemyType.shifter;
-        } else if (chance < 0.15 && g.wave >= 20) {
+        } else if (chance < 0.15 && wave >= 20) {
           type = EnemyType.bulwark;
-        } else if (chance < 0.30 && g.wave >= 15) {
+        } else if (chance < 0.30 && wave >= 15) {
           type = EnemyType.splitter;
         } else if (chance < 0.50) {
           type = EnemyType.fast;
@@ -128,13 +129,13 @@ class WaveSystem extends Component with HasGameReference {
     }
 
     // Boss wave: insert boss at random queue position (JS: wave % 10 === 0)
-    if (g.wave % 10 == 0) {
+    if (wave % 10 == 0) {
       final idx = _rng.nextInt(spawnQueue.length + 1);
       spawnQueue.insert(idx, EnemyType.boss);
     }
 
     // Surprise boss after wave 50 (JS: 25% chance)
-    if (g.wave > 50 && g.wave % 5 == 0 && g.wave % 10 != 0) {
+    if (wave > 50 && wave % 5 == 0 && wave % 10 != 0) {
       if (_rng.nextDouble() < 0.25) {
         final idx = _rng.nextInt(spawnQueue.length + 1);
         spawnQueue.insert(idx, EnemyType.boss);
@@ -146,8 +147,8 @@ class WaveSystem extends Component with HasGameReference {
 
   void _endWave() {
     final g = gameWorld.game;
-    g.isWaveActive = false;
-    g.wave++;
+    g.state.isWaveActive.value = false;
+    g.state.wave.value++;
     startPrepPhase();
   }
 
@@ -159,7 +160,7 @@ class WaveSystem extends Component with HasGameReference {
     final g = gameWorld.game;
 
     // Scale HP by wave
-    final scaledHp = def.hp * (1.0 + g.wave * 0.4);
+    final scaledHp = def.hp * (1.0 + g.state.wave.value * 0.4);
 
     final enemy = Enemy(
       type: type,
@@ -177,24 +178,24 @@ class WaveSystem extends Component with HasGameReference {
   }
 
   bool _noEnemiesAlive() {
-    return gameWorld.children.whereType<Enemy>().isEmpty;
+    return gameWorld.game.entities.enemies.isEmpty;
   }
 
 Future<void> _generateMissingRifts() async {
     // Wave 1: 1 rift; +1 every 10 waves to wave 50; +1 every 5 waves after
-    final g = gameWorld.game;
+    final wave = gameWorld.game.state.wave.value;
     int targetRifts;
-    if (g.wave <= 50) {
-      targetRifts = 1 + (g.wave - 1) ~/ 10;
+    if (wave <= 50) {
+      targetRifts = 1 + (wave - 1) ~/ 10;
     } else {
-      targetRifts = 6 + (g.wave - 51) ~/ 5;
+      targetRifts = 6 + (wave - 51) ~/ 5;
     }
     targetRifts = targetRifts.clamp(1, 20);
 
     while (rifts.length < targetRifts) {
       final rift = await gameWorld.riftGenerator.generateRift(
         existingPaths: rifts,
-        wave: g.wave,
+        wave: wave,
       );
       if (rift != null) {
         rifts.add(rift);

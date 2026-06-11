@@ -30,10 +30,7 @@ class PauseMenu extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              _menuBtn('RESUME', const Color(0xFF00F3FF), () {
-                game.isPaused = false;
-                game.overlays.remove('pauseMenu');
-              }),
+              _menuBtn('RESUME', const Color(0xFF00F3FF), game.togglePause),
               const SizedBox(height: 10),
               _menuBtn('RESET', const Color(0xFFFF00AC), () {
                 game.overlays.remove('pauseMenu');

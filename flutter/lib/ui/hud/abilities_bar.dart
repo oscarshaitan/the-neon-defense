@@ -62,7 +62,8 @@ class _EnergyBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fraction = (game.energy / game.maxEnergy).clamp(0.0, 1.0);
+    final energy = game.state.energy.value;
+    final fraction = (energy / game.state.maxEnergy).clamp(0.0, 1.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -92,7 +93,7 @@ class _EnergyBar extends StatelessWidget {
         ),
         const SizedBox(height: 3),
         Text(
-          '${game.energy.toInt()}/${game.maxEnergy.toInt()}',
+          '${energy.toInt()}/${game.state.maxEnergy.toInt()}',
           style: const TextStyle(
             fontFamily: 'Orbitron',
             fontSize: 7,
