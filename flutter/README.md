@@ -2,75 +2,51 @@
 
 A Flutter/Flame port of [the original JS game](../js/), targeting web (CanvasKit), Android, and iOS from a single codebase.
 
-**Status: Active development — core gameplay loop is functional.**
+**Status: behavioral parity with the JS implementation** (per [FLUTTER_MIGRATION_PLAN.md](../FLUTTER_MIGRATION_PLAN.md), phases A1–A7). The JS game remains the reference spec; every number, formula, and visual detail is traced to its JS source in code comments.
 
 ---
 
-## What Works
+## Parity highlights
 
-### Game World
-- White infinite-looking grid (60-cell margin beyond world bounds)
-- Core crystal — green diamond at world center with glow
-- Hardpoint system — core ring (green, 6 slots) and micro rings (yellow, 24 slots) with crosshair indicators
-- Rift path rendering — wide glow background + dashed cyan center line + pulsing red spawn circle
+### Architecture (Phase A1)
+- Typed `GameState` (ValueNotifier-backed) — no `dynamic` casts anywhere
+- `EntityRegistry` with explicit tower/enemy/projectile lists (mirrors the JS module arrays)
+- `InputRouter` resolving all taps with the JS `handleClick()` priority order
+- Fixed 60 Hz logic stepping so JS frame-based numbers transfer 1:1 at any refresh rate
+- Explicit `RenderLayers` priorities matching the JS `draw()` pipeline
+- Central pause gating; HUD updates at the JS UI sync interval
 
-### Towers
-- All four tower types: **Basic** (square), **Rapid** (circle), **Sniper** (diamond), **Arc** (hexagon)
-- Hardpoint snapping and scale/stat multipliers per ring
-- Tower targeting via spatial grid
-- Projectile system
-- Tower upgrade and sell flow
-- Arc tower network links and static charge accumulation
-- Overclock ability buff (yellow pulsing)
+### Gameplay (Phase A2)
+- Full rift-generation port: orbital zone shells, merge-vs-direct missions, core gap sectors, zone-0 commitment, core repulsion + near-core turn penalties, relaxation retries; new rifts destroy overlapping non-hardpoint towers (70% refund)
+- Free-tile placement with the JS build-target flow (tap tile → pick type); hardpoints are always-buildable anchors with stat multipliers
+- Targeting: nearest-first with bulwark taunt priority; invisible shifters untargetable
+- Splitters burst into 2–3 minis inheriting path progress, tier, and mutation
+- Mutations (CRIMSON/VOID/TITAN/PHASE/NEON) applied to stats and colors, cleared each wave; rifts evolve permanently past wave 50
+- Base turret with exact JS numbers, repair (+2 lives) and upgrade (+2 levels) quirks replicated
+- Frozen ×1.2 damage, overclock cdRate, projectile speeds 10/12
 
-### Enemies
-- Eight enemy types: Basic, Fast, Tank, Boss, Splitter, Mini, Bulwark, Shifter
-- Path following with interpolated movement
-- HP bars, freeze status effect
-- Spatial grid registration for O(1) tower targeting
+### Game feel (Phase A3)
+- Screen shake, per-type enemy silhouettes, elite markers, damage-only HP bars
+- JS tower shapes/sizes, level pips (diamond per 5 + dot per 1), selection rings
+- Base hex shields + orbiting drones; rift tier/mutation styling with spawn pulses
+- Build-target brackets + ghost preview with validity colors
+- JS particle semantics (3×3 rects, alpha-quantized batching) with every JS effect call site
+- Quality governor toasts + HIGH/MED/LOW/AUTO controls
 
-### Wave System
-- Prep phase (countdown timer + START WAVE button)
-- Active wave (enemy spawning queue, 1/60 frames)
-- Rift path generation via `compute()` (parallel isolate on mobile, sync on web)
-- A* pathfinding with zone-0 commitment and core repulsion costs
+### Persistence (Phase A4)
+- Save schema mirrors JS `neonDefenseSave` field-for-field
+- Autosave cadence (120-frame min gap / 360 max delay) + immediate saves on the JS triggers
+- CONTINUE / NEW GAME start screen; mid-wave loads demote to a 5 s prep
 
-### Abilities
-- **EMP Burst** — freeze all enemies in radius, cooldown system
-- **Overclock** — boost nearest tower's fire rate
-- Targeting overlay rendered in world space (crosshair / pulse ring)
-- Vertical energy bar with per-frame regeneration
+### Audio (Phase A5)
+- The JS procedural patterns pre-rendered to WAV by `tool/render_audio.py` (15 wave-indexed loops + threat loop + 4 SFX)
+- Threat track while a boss/mutant is alive; throttled shoot SFX; persisted volumes/mute
 
-### HUD
-- Full-width stats bar (Wave · Lives · Enemies/Timer · Credits · Pause)
-- Tower selector bar with shaped icons and green selection highlight
-- Abilities bar (center-right) with cooldown fill and energy bar
-- Tower info panel (bottom-left) with stacked Upgrade / Sell / Close buttons
-- Recenter button (bottom-right circle)
-
-### Infrastructure
-- Camera pan (drag) and pinch zoom (0.1× – 1.0×), zoom-to-cursor
-- Quality governor — EMA frame time → HIGH / BALANCED / LOW profiles
-- Particle system, arc lightning, light source system (pooled)
-- Save system wired (`SharedPreferences`, JSON snapshot)
-- Audio manager wired (`flame_audio` wrapper, safe no-op without assets)
-- Pause menu, Game Over screen, Start screen
-- Orbitron font bundled locally (no CDN dependency)
-
----
-
-## What's Missing / Pending
-
-| Feature | Notes |
-|---|---|
-| Audio assets | `AudioManager` is wired but `assets/audio/` is empty — needs SFX/music files |
-| Save/load UI | `SaveSystem` is wired but no save/load trigger in pause menu yet |
-| Wave Intelligence panel | Not implemented (JS has threat preview with enemy distribution) |
-| Tutorial / onboarding | Not implemented |
-| Quality toast | Auto-downgrade notification not shown yet |
-| Mutation events | Wave mutations defined in JS but not ported to Dart |
-| Full enemy behaviors | Shifter invisibility, Splitter split-on-death not yet ported |
-| GitHub Pages deploy | `flutter build web` works locally; CI deploy not set up |
+### Onboarding (Phase A6)
+- 5-step tutorial with typewriter dialogs and gameplay-gated advancement
+- Versioned onboarding hints (ability/camera/rift/tower)
+- Wave Intelligence panel: predicted/live distribution, threat tags, mutation readiness
+- Hotkeys: Q/W/E/R build, 1/2 abilities, U upgrade, Del sell, Esc two-stage, P pause
 
 ---
 
@@ -78,16 +54,28 @@ A Flutter/Flame port of [the original JS game](../js/), targeting web (CanvasKit
 
 ```bash
 flutter pub get
-flutter run -d chrome --web-renderer canvaskit
+flutter run -d chrome
 ```
 
 Build for web:
 
 ```bash
-flutter build web --base-href /the-neon-defense/flutter/ --web-renderer canvaskit
+flutter build web --base-href /the-neon-defense/flutter/
 ```
 
 > **CanvasKit is required.** The HTML renderer does not produce game-quality Canvas output.
+
+Regenerate audio assets after changing the JS patterns:
+
+```bash
+python3 tool/render_audio.py
+```
+
+Tests (tower economy, mutations, placement snapping, Wave Intel math):
+
+```bash
+flutter test
+```
 
 ---
 
@@ -95,57 +83,67 @@ flutter build web --base-href /the-neon-defense/flutter/ --web-renderer canvaski
 
 ```
 lib/
-  main.dart                     — App entry, GameWidget, _HudLayer (Ticker-driven)
+  main.dart                     — App entry, GameWidget, HUD stack (notifier-driven)
   game/
-    neon_defense_game.dart      — FlameGame root, TapCallbacks, ScaleDetector
-    config/
-      constants.dart            — All game constants (mirrors JS 00_core.js)
+    neon_defense_game.dart      — FlameGame root, fixed-step loop, hotkeys
+    config/constants.dart       — All game constants (mirrors JS 00_core.js)
+    state/
+      game_state.dart           — Typed observable game state
+      selection_state.dart      — Mutually exclusive selection states
+      entity_registry.dart      — Explicit entity lists
+    input/input_router.dart     — JS handleClick() priority order
     world/
-      game_world.dart           — World component, rift path rendering, entity API
-      tile_grid.dart            — Infinite-looking grid (white, 60-cell margin)
-      hardpoint_manager.dart    — Core + micro ring hardpoints, crosshair render
+      game_world.dart           — RenderLayers, pause gate, entity API
+      rift_path_renderer.dart   — Rift styling layer
+      tile_grid.dart            — Infinite-looking grid
+      hardpoint_manager.dart    — Core + micro ring hardpoints
     entities/
-      towers/tower.dart         — Targeting, firing, upgrade, overclock
-      enemies/enemy.dart        — Path following, HP bar, freeze effect
+      towers/tower.dart         — Taunt-aware targeting, overclock cdRate
+      enemies/enemy.dart        — Silhouettes, status effects, splitter death
       projectiles/projectile.dart
-      base/core_base.dart       — Green diamond, turret at level > 0
+      base/core_base.dart       — Turret, repair/upgrade, shields + drones
     systems/
       pathfinding/
-        a_star.dart             — A* with zone-0 commitment + core repulsion
-        rift_generator.dart     — compute()-based async rift generation
-      wave_system.dart          — Prep countdown, spawn queue, wave progression
-      spatial_grid.dart         — 200-unit cell buckets for O(1) enemy lookup
-      ability_system.dart       — EMP + Overclock state machine
-      quality_governor.dart     — EMA frame time → quality profile
-      save_system.dart          — SharedPreferences JSON snapshot
+        a_star.dart             — Faithful findPathOnGrid port
+        rift_generator.dart     — Mission logic port (compute() isolate)
+      placement_system.dart     — Free-tile placement + validation
+      wave_system.dart          — Waves, mutations, rift evolution
+      wave_intel.dart           — distributeByWeights + intel report (pure)
+      tutorial_system.dart      — 5-step tutorial state machine
+      hint_system.dart          — Versioned onboarding hints
+      spatial_grid.dart         — 200-unit cells + taunter sub-index
+      ability_system.dart       — EMP + Overclock
+      quality_governor.dart     — EMA frame time -> profile + toasts
+      save_system.dart          — JS-schema save/load + autosave cadence
     vfx/
-      particle_system.dart      — Object pool, alpha-quantized batching
-      arc_lightning.dart        — Jittered segment lightning
-      light_source.dart         — Fade-out gradient blobs
-    audio/
-      audio_manager.dart        — flame_audio wrapper (no-op safe)
-    camera/
-      game_camera.dart          — ScaleDetector pan + pinch zoom
+      particle_system.dart      — JS createParticles semantics
+      render_utils.dart         — drawTowerShape, drawLevelPips, dashes
+      placement_preview.dart    — Build-target brackets + ghost
+      arc_lightning.dart, light_source.dart
+    audio/audio_manager.dart    — Pre-rendered loop selection + SFX
+    camera/game_camera.dart     — Pan/zoom + screen shake
   ui/
-    hud/
-      stats_bar.dart            — Full-width, spaceBetween layout
-      tower_bar.dart            — 60×80 buttons, shaped icons, green selection
-      abilities_bar.dart        — Vertical column, energy bar
-    panels/
-      selection_panel.dart      — Bottom-left, pink border, stacked buttons
-      pause_menu.dart
-    screens/
-      start_screen.dart
-      game_over_screen.dart
+    hud/                        — stats bar (Wave Intel toggle), tower bar, abilities bar
+    panels/                     — selection (tower/rift/base), pause, wave intel
+    overlays/tutorial_overlay.dart
+    screens/                    — start (CONTINUE/NEW GAME), game over
+tool/
+  render_audio.py               — Offline renderer for the JS procedural audio
 ```
 
 ---
 
+## Known gaps vs JS
+
+- World bounds are fixed at 140×90 (the JS `expandWorldBounds` growth isn't ported)
+- Debug/Command Center menu and FPS readout are not ported
+- The selection panel is docked bottom-left rather than floating next to the selected object
+
 ## Dependencies
 
 ```yaml
-flame: ^1.35.1          # Game engine
-flame_audio: ^2.x       # SFX + music (assets pending)
-shared_preferences: ^2.x # Save/load
-google_fonts: ^8.x      # Kept as dep; Orbitron is now bundled in assets/fonts/
+flame: ^1.35.1           # Game engine
+flame_audio: ^2.x        # Pre-rendered music loops + SFX
+shared_preferences: ^2.x # Save/load + settings persistence
+google_fonts: ^8.x       # Kept as dep; Orbitron is bundled in assets/fonts/
 ```
