@@ -31,7 +31,8 @@ class SaveSystem {
       'rifts': gw.waveSystem.rifts
           .map((r) => {
                 'level': r.level,
-                'mutationKey': r.mutationKey,
+                'zone': r.zone,
+                'mutation': r.mutation?.toJson(),
                 'points': r.points
                     .map((p) => {'x': p.x, 'y': p.y})
                     .toList(),
@@ -81,7 +82,9 @@ class SaveSystem {
       gw.waveSystem.rifts.add(RiftPath(
         points: points,
         level: rMap['level'] as int? ?? 1,
-        mutationKey: rMap['mutationKey'] as String?,
+        zone: rMap['zone'] as int? ?? 1,
+        mutation:
+            Mutation.fromJson(rMap['mutation'] as Map<String, dynamic>?),
       ));
     }
   }

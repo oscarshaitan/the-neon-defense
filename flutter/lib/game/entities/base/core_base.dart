@@ -3,15 +3,19 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 
 import '../../config/constants.dart';
+import '../../neon_defense_game.dart';
 import '../../systems/spatial_grid.dart';
+import '../enemies/enemy.dart';
 import '../projectiles/projectile.dart';
 
-class CoreBase extends PositionComponent {
+/// The core crystal + optional turret (level > 0).
+/// Turret numbers match JS exactly (05_loop.js:1399-1432):
+/// damage 20 + (level-1)*10, range 150 + (level-1)*30,
+/// cooldown max(8, 35 - level*5), projectile speed 12.
+class CoreBase extends PositionComponent
+    with HasGameReference<NeonDefenseGame> {
   int level = 0;
-  double baseDamage = 20.0;
-  double baseRange = 150.0;
   int baseCooldown = 0;
-  final int baseMaxCooldown = 60;
 
   final SpatialGrid spatialGrid;
 
@@ -25,37 +29,72 @@ class CoreBase extends PositionComponent {
           anchor: Anchor.center,
         );
 
+  double get currentDamage => 20.0 + (level - 1) * 10.0;
+  double get currentRange => 150.0 + (level - 1) * 30.0;
+  int get currentCooldown => max(8, 35 - level * 5);
+
+  /// JS: 200 * (baseLevel + 1) (01_init.js:519)
   double get upgradeCost => 200.0 * (level + 1);
-  double get repairCost => 50.0;
+
+  /// JS getRepairCost (01_init.js:493-497): $50 base, +$25 per life
+  /// bought beyond the starting 20.
+  double get repairCost {
+    final lives = game.state.lives.value;
+    if (lives < 20) return 50;
+    return 50.0 + (lives - 20 + 1) * 25;
+  }
+
+  bool get canUpgrade => level < 10;
+
+  /// JS repairBase (01_init.js:499-515) — adds TWO lives (played behavior;
+  /// the UI label says +1 but the implementation increments twice).
+  bool repair() {
+    final cost = repairCost;
+    if (game.state.money.value < cost) return false;
+    game.state.money.value -= cost;
+    game.state.lives.value += 2;
+    return true;
+  }
+
+  /// JS upgradeBase (01_init.js:517-535) — increments level TWICE per
+  /// purchase (played behavior; replicated as-is).
+  bool upgrade() {
+    final cost = upgradeCost;
+    if (game.state.money.value < cost || level >= 10) return false;
+    game.state.money.value -= cost;
+    level++;
+    level++;
+    return true;
+  }
 
   @override
   void update(double dt) {
     if (level == 0) return;
 
-    if (baseCooldown > 0) {
-      baseCooldown--;
-      return;
+    if (baseCooldown > 0) baseCooldown--;
+
+    // JS base turret targets the nearest enemy.
+    final candidates = spatialGrid.queryRadius(position, currentRange);
+    Enemy? target;
+    var minDist2 = double.infinity;
+    for (final e in candidates) {
+      final d2 = e.position.distanceToSquared(position);
+      if (d2 < minDist2) {
+        minDist2 = d2;
+        target = e;
+      }
     }
 
-    final candidates = spatialGrid.queryRadius(position, baseRange);
-    if (candidates.isNotEmpty) {
-      candidates.sort((a, b) => b.pathIndex.compareTo(a.pathIndex));
-      final target = candidates.first;
+    if (target != null && baseCooldown <= 0) {
       parent?.add(Projectile(
         startPos: position.clone(),
         target: target,
-        damage: baseDamage,
-        speed: 7.0,
+        damage: currentDamage,
+        speed: 12.0, // JS spawnProjectile(..., 12, ...) for the base
         color: _green,
       ));
-      baseCooldown = baseMaxCooldown;
+      baseCooldown = currentCooldown;
     }
-  }
-
-  void upgradeBase() {
-    level++;
-    baseDamage = 20 + (level - 1) * 10.0;
-    baseRange = 150 + (level - 1) * 30.0;
   }
 
   @override

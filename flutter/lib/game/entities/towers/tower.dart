@@ -46,7 +46,7 @@ class Tower extends PositionComponent
             (hardpoint?.damageMult ?? 1.0),
         range = (kTowers[type]!.range *
             (hardpoint?.rangeMult ?? 1.0))
-            .clamp(0, 800),
+            .clamp(0, kMaxTowerRange),
         // JS: Math.max(4, towerConfig.cooldown * hardpointRules.cooldownMult)
         maxCooldown = hardpoint != null
             ? max(4, (kTowers[type]!.cooldown * hardpoint.cooldownMult).round())
@@ -78,41 +78,51 @@ class Tower extends PositionComponent
 
   @override
   void update(double dt) {
+    // JS updateTowers (05_loop.js:1351-1397): overclock doubles the cooldown
+    // decrement rate rather than halving maxCooldown.
+    var cdRate = 1;
     if (overclocked) {
+      cdRate = 2;
       overclockTimer--;
       if (overclockTimer <= 0) overclocked = false;
     }
 
-    if (cooldown > 0) {
-      cooldown--;
-      return;
-    }
+    if (cooldown > 0) cooldown -= cdRate;
 
     final target = _findTarget();
-    if (target != null) {
+    if (target != null && cooldown <= 0) {
       _fire(target);
-      final effectiveCooldown = overclocked
-          ? (maxCooldown * 0.5).round()
-          : maxCooldown;
-      cooldown = effectiveCooldown;
+      cooldown = maxCooldown;
     }
   }
 
+  /// JS targeting: bulwark taunters in range take priority; otherwise the
+  /// nearest targetable (non-invisible) enemy.
   Enemy? _findTarget() {
-    final candidates = spatialGrid.queryRadius(position, range);
+    var candidates = spatialGrid.queryTaunters(position, range);
+    if (candidates.isEmpty) {
+      candidates = spatialGrid.queryRadius(position, range);
+    }
     if (candidates.isEmpty) return null;
-    // Prioritize enemy closest to end of its path (most progress)
-    candidates.sort((a, b) => b.pathIndex.compareTo(a.pathIndex));
-    return candidates.first;
+
+    Enemy? nearest;
+    var minDist2 = double.infinity;
+    for (final e in candidates) {
+      final d2 = e.position.distanceToSquared(position);
+      if (d2 < minDist2) {
+        minDist2 = d2;
+        nearest = e;
+      }
+    }
+    return nearest;
   }
 
   void _fire(Enemy target) {
-    final projectileSpeed = 6.0;
     final proj = Projectile(
       startPos: position.clone(),
       target: target,
       damage: damage,
-      speed: projectileSpeed,
+      speed: 10.0, // JS spawnProjectile(..., 10, ...) for towers
       color: color,
     );
     parent?.add(proj);
@@ -122,17 +132,19 @@ class Tower extends PositionComponent
   // Upgrades
   // ---------------------------------------------------------------------------
 
-  double get upgradeCost => baseCost * 0.5 * level;
+  double get upgradeCost =>
+      (baseCost * 0.5 * level).floorToDouble(); // JS getUpgradeCost
 
   void upgrade() {
     final cost = upgradeCost; // capture before level++ (JS: getUpgradeCost called before level++)
     level++;
     damage *= 1.2;
-    range = (range * 1.1).clamp(0, 800);
+    range = (range * 1.1).clamp(0, kMaxTowerRange);
     totalCost += cost;
   }
 
-  double get sellValue => totalCost * 0.7; // JS: Math.floor(totalCost * 0.7)
+  double get sellValue =>
+      (totalCost * 0.7).floorToDouble(); // JS: Math.floor(totalCost * 0.7)
 
   // ---------------------------------------------------------------------------
   // Rendering

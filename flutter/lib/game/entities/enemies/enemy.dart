@@ -18,6 +18,8 @@ class Enemy extends PositionComponent
   final double width;
   final List<Vector2> path;
   final int riftLevel;
+  final bool isMutant;
+  final String? mutationKey;
   final SpatialGrid spatialGrid;
 
   int pathIndex = 0;
@@ -29,7 +31,6 @@ class Enemy extends PositionComponent
   double staticCharges = 0;
   int staticStunTimer = 0;
   bool isInvisible = false;
-  double _visibilityTimer = 0; // shifter cycle timer (seconds)
 
   Enemy({
     required this.type,
@@ -41,13 +42,19 @@ class Enemy extends PositionComponent
     required this.path,
     required this.riftLevel,
     required this.spatialGrid,
+    this.isMutant = false,
+    this.mutationKey,
+    Vector2? spawnPos,
+    int? startPathIndex,
   })  : maxHp = hp,
         super(
           size: Vector2.all(width),
           anchor: Anchor.center,
           priority: RenderLayers.enemies,
         ) {
-    position = path.isNotEmpty ? path[0].clone() : Vector2.zero();
+    position = spawnPos?.clone() ??
+        (path.isNotEmpty ? path[0].clone() : Vector2.zero());
+    pathIndex = startPathIndex ?? 0;
   }
 
   @override
@@ -68,9 +75,16 @@ class Enemy extends PositionComponent
   void update(double dt) {
     if (isDead || reachedCore) return;
 
-    // Status: frozen / stun
-    if (frozenTimer > 0) { frozenTimer--; return; }
-    if (staticStunTimer > 0) { staticStunTimer--; return; }
+    // Status: frozen / stun (JS: frozen enemies still tick down stun)
+    if (frozenTimer > 0) {
+      if (staticStunTimer > 0) staticStunTimer--;
+      frozenTimer--;
+      return;
+    }
+    if (staticStunTimer > 0) {
+      staticStunTimer--;
+      return;
+    }
 
     if (pathIndex >= path.length) {
       _reachCore();
@@ -93,14 +107,14 @@ class Enemy extends PositionComponent
       spatialGrid.update(this, oldPos);
     }
 
-    // Shifter: toggle invisibility every 3s (JS: frameCount % 360 > 180 at 60fps)
+    // Shifter phase cycle — JS: isInvisible = (frameCount % 360) > 180
     if (type == EnemyType.shifter) {
-      _visibilityTimer += dt;
-      isInvisible = (_visibilityTimer % 6.0) > 3.0;
+      isInvisible = (game.state.frameCount % 360) > 180;
     }
   }
 
   void takeDamage(double dmg) {
+    if (isFrozen) dmg *= 1.2; // JS hitEnemy: frozen enemies take +20%
     hp -= dmg;
     if (hp <= 0) _die();
   }
@@ -123,6 +137,9 @@ class Enemy extends PositionComponent
     game.state.money.value += reward;
     game.state.addEnergy(1.0);
     game.state.recordKill(type);
+    if (type == EnemyType.splitter) {
+      game.gameWorld.spawnMinis(this);
+    }
     removeFromParent();
   }
 

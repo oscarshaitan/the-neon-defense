@@ -2,19 +2,24 @@ import 'package:flame/components.dart';
 
 import '../neon_defense_game.dart';
 import '../entities/towers/tower.dart';
+import '../systems/pathfinding/rift_generator.dart';
+import '../systems/placement_system.dart';
 
 /// All world taps resolve here, in one place, mirroring the JS
 /// handleClick() priority order (01_init.js:280-432):
 ///   1. ability targeting consumes the tap
 ///   2. tower hit (< 20 world units) selects the tower
-///   3. build placement (selected tower type)
-///   4. otherwise deselect everything
-/// Rift-spawn and base hits slot in between 2 and 3 in Phase A2.
+///   3. rift spawn hit (< 30) selects the rift
+///   4. base hit (< 30) selects the base
+///   5. free tile -> build target (tapping the same target deselects)
+///   6. otherwise deselect everything
 class InputRouter {
   final NeonDefenseGame game;
 
-  /// JS tower hit radius (01_init.js: dist < 20).
+  /// JS hit radii (01_init.js).
   static const double towerHitRadius = 20.0;
+  static const double riftHitRadius = 30.0;
+  static const double baseHitRadius = 30.0;
 
   InputRouter(this.game);
 
@@ -33,8 +38,29 @@ class InputRouter {
       return;
     }
 
-    if (game.selection.selectedTowerType != null) {
-      game.gameWorld.placeTower(worldPos);
+    final rift = _riftAt(worldPos);
+    if (rift != null) {
+      game.selection.selectRift(rift);
+      return;
+    }
+
+    if (game.gameWorld.coreBase.position.distanceTo(worldPos) <
+        baseHitRadius) {
+      game.selection.selectBase();
+      return;
+    }
+
+    final snap = PlacementSystem.snapToGrid(worldPos);
+    if (game.placement.isTileFree(snap)) {
+      // Toggle behavior: tapping the selected empty tile deselects it.
+      final current = game.selection.buildTarget;
+      if (current != null &&
+          current.x == snap.x &&
+          current.y == snap.y) {
+        game.selection.clear();
+        return;
+      }
+      game.selection.selectBuildTarget(snap);
       return;
     }
 
@@ -52,5 +78,15 @@ class InputRouter {
       }
     }
     return hit;
+  }
+
+  RiftPath? _riftAt(Vector2 worldPos) {
+    for (final rift in game.gameWorld.waveSystem.rifts) {
+      if (rift.points.isEmpty) continue;
+      if (rift.points.first.distanceTo(worldPos) < riftHitRadius) {
+        return rift;
+      }
+    }
+    return null;
   }
 }

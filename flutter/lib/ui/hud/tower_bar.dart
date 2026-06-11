@@ -73,7 +73,7 @@ class _TowerButton extends StatelessWidget {
             : const Color(0x33FFFFFF);
 
     return GestureDetector(
-      onTap: canAfford ? () => game.selection.selectTowerType(type) : null,
+      onTap: canAfford ? () => game.chooseTowerType(type) : null,
       child: Container(
         width: 60,
         height: 80,

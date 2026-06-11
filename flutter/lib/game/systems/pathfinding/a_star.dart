@@ -1,168 +1,211 @@
 import 'dart:math';
 
-/// A* pathfinder for rift generation.
-/// Runs in plain Dart (no Flutter imports) so it can be called inside compute().
+/// Faithful port of the JS grid pathfinder `findPathOnGrid`
+/// (04_tutorial.js:637-766). Plain Dart (no Flutter imports) so it can run
+/// inside compute().
 
-class GridPoint {
-  final int col;
-  final int row;
-  const GridPoint(this.col, this.row);
-
-  @override
-  bool operator ==(Object other) =>
-      other is GridPoint && other.col == col && other.row == row;
+class Cell {
+  final int c;
+  final int r;
+  const Cell(this.c, this.r);
 
   @override
-  int get hashCode => col * 100003 + row;
+  bool operator ==(Object other) => other is Cell && other.c == c && other.r == r;
 
   @override
-  String toString() => '($col, $row)';
+  int get hashCode => c * 100003 + r;
+
+  @override
+  String toString() => '($c, $r)';
 }
 
-class AStarResult {
-  final List<GridPoint> path; // from start to end inclusive
-  final bool found;
-  const AStarResult(this.path, this.found);
+/// JS PATHING_RULES (00_core.js:17-23).
+class PathingRules {
+  static const double coreRepulsionRadius = 9; // grid cells
+  static const double coreRepulsionStrength = 14; // extra path cost near core
+  static const double nearCoreStraightRadius = 8; // grid cells
+  static const double nearCoreTurnPenaltyBoost = 18; // extra turn cost near core
+  static const double mergeMinCoreDistance = 7; // prefer merges away from core
 }
 
-/// Obstacles: a set of (col, row) that cannot be entered.
-/// Zone0 radius in cells: once a path enters this radius it cannot exit it.
-AStarResult findPath({
-  required GridPoint start,
-  required GridPoint end,
+class _Node {
+  final int c;
+  final int r;
+  double g;
+  final double h;
+  double f;
+  _Node? parent;
+  int? dc;
+  int? dr;
+  bool enteredZone0;
+
+  _Node({
+    required this.c,
+    required this.r,
+    required this.g,
+    required this.h,
+    required this.f,
+    this.parent,
+    this.dc,
+    this.dr,
+    required this.enteredZone0,
+  });
+}
+
+bool isCellInsideZone0(int c, int r, int coreC, int coreR, int zone0Radius) {
+  final dx = c - coreC;
+  final dy = r - coreR;
+  return sqrt((dx * dx + dy * dy).toDouble()) < zone0Radius;
+}
+
+double coreRepulsionPenalty(int c, int r, int coreC, int coreR) {
+  final dx = c - coreC;
+  final dy = r - coreR;
+  final distToCore = sqrt((dx * dx + dy * dy).toDouble());
+  if (distToCore >= PathingRules.coreRepulsionRadius) return 0;
+  final t = 1 - (distToCore / PathingRules.coreRepulsionRadius);
+  return PathingRules.coreRepulsionStrength * t * t;
+}
+
+/// Returns path as grid cells from start to end inclusive, or null.
+/// [allowedObstacleKeys] are obstacle cells that may still be entered
+/// (merge points). Once a route enters zone 0 it cannot step back outside.
+List<Cell>? findPathOnGrid({
+  required Cell start,
+  required Cell end,
   required int cols,
   required int rows,
-  required Set<GridPoint> obstacles,
-  required int zone0RadiusCells,
-  required int coreCenterCol,
-  required int coreCenterRow,
+  required Set<Cell> obstacles,
+  Set<Cell>? allowedObstacles,
+  Cell? coreNode,
+  bool lockZone0AfterEntry = false,
+  int zone0Radius = 6,
 }) {
-  // A* open set (priority queue via sorted list — fine for this map size)
-  final cameFrom = <GridPoint, GridPoint>{};
-  final gScore = <GridPoint, double>{start: 0};
-  final fScore = <GridPoint, double>{start: _heuristic(start, end)};
-  final openSet = <GridPoint>{start};
-  final closedSet = <GridPoint>{};
+  final allowed = allowedObstacles ?? const <Cell>{};
+  final lock = lockZone0AfterEntry && coreNode != null;
+  final startsInsideZone0 = lock &&
+      isCellInsideZone0(start.c, start.r, coreNode.c, coreNode.r, zone0Radius);
 
-  // Track which cells have been in zone0
-  final enteredZone0 = <GridPoint>{};
-  if (_inZone0(start, coreCenterCol, coreCenterRow, zone0RadiusCells)) {
-    enteredZone0.add(start);
+  bool isInCurrentBranch(_Node? node, int c, int r) {
+    var cursor = node;
+    while (cursor != null) {
+      if (cursor.c == c && cursor.r == r) return true;
+      cursor = cursor.parent;
+    }
+    return false;
   }
+
+  double heuristic(int c, int r) =>
+      ((c - end.c).abs() + (r - end.r).abs()).toDouble();
+
+  final openSet = <_Node>[
+    _Node(
+      c: start.c,
+      r: start.r,
+      g: 0,
+      h: heuristic(start.c, start.r),
+      f: heuristic(start.c, start.r),
+      enteredZone0: startsInsideZone0,
+    ),
+  ];
+  final closedSet = <String, double>{};
 
   while (openSet.isNotEmpty) {
-    // Get node with lowest fScore
-    GridPoint current = openSet.reduce(
-      (a, b) => (fScore[a] ?? double.infinity) < (fScore[b] ?? double.infinity)
-          ? a
-          : b,
-    );
+    var bestIndex = 0;
+    for (var i = 1; i < openSet.length; i++) {
+      if (openSet[i].f < openSet[bestIndex].f) bestIndex = i;
+    }
+    final current = openSet.removeAt(bestIndex);
 
-    if (current == end) {
-      return AStarResult(_reconstructPath(cameFrom, current), true);
+    if (current.c == end.c && current.r == end.r) {
+      final pathCells = <Cell>[];
+      final uniqueCells = <Cell>{};
+      _Node? temp = current;
+      while (temp != null) {
+        final cell = Cell(temp.c, temp.r);
+        if (uniqueCells.contains(cell)) return null;
+        uniqueCells.add(cell);
+        pathCells.insert(0, cell);
+        temp = temp.parent;
+      }
+      return pathCells;
     }
 
-    openSet.remove(current);
-    closedSet.add(current);
+    closedSet['${current.c},${current.r},${current.enteredZone0 ? 1 : 0}'] =
+        current.g;
 
-    for (final neighbor in _neighbors(current, cols, rows)) {
-      if (closedSet.contains(neighbor)) continue;
-      if (obstacles.contains(neighbor)) continue;
+    const dirs = [(0, -1), (1, 0), (0, 1), (-1, 0)];
+    for (final (dc, dr) in dirs) {
+      final nc = current.c + dc;
+      final nr = current.r + dr;
+      if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
 
-      // Zone0 commitment: if path exited zone0, can't re-enter
-      final neighborInZone0 =
-          _inZone0(neighbor, coreCenterCol, coreCenterRow, zone0RadiusCells);
-      final currentInZone0 = enteredZone0.contains(current);
+      final nCell = Cell(nc, nr);
+      // Hard block occupied tiles; merge allowed only at approved cells.
+      if (obstacles.contains(nCell) && !allowed.contains(nCell)) continue;
+      // Prevent branch loops/folding over itself while searching.
+      if (isInCurrentBranch(current, nc, nr)) continue;
 
-      // If we previously exited zone0 from this path, block re-entry
-      // (tracked via: if current is not in zone0 but neighbor is, that's re-entry)
-      // Simple heuristic: if current is NOT in zone0 and has previously entered it,
-      // we are "outside" — so block zone0 re-entry.
-      // We track whether zone0 was exited by checking: cell exited zone0 = was in zone0
-      // but current cell is not.
-      // Full commitment: once any cell in the path was in zone0, all subsequent
-      // cells must also be in zone0.
-      final pathEnteredZone0 = enteredZone0.isNotEmpty;
-      if (pathEnteredZone0 && !currentInZone0 && neighborInZone0) {
-        continue; // would re-enter zone0 — not allowed
+      final nextInsideZone0 = lock &&
+          isCellInsideZone0(nc, nr, coreNode.c, coreNode.r, zone0Radius);
+      final nextEnteredZone0 =
+          lock ? (current.enteredZone0 || nextInsideZone0) : false;
+      // Once route enters Zone 0, it cannot step back outside.
+      if (lock && current.enteredZone0 && !nextInsideZone0) continue;
+
+      var cost = 1.0;
+      final isTurning =
+          current.dc != null && (current.dc != dc || current.dr != dr);
+      if (isTurning) {
+        cost += 5; // JS baseline turn penalty
       }
 
-      final tentativeG =
-          (gScore[current] ?? double.infinity) + _cost(current, neighbor,
-              coreCenterCol, coreCenterRow, zone0RadiusCells);
+      final distToCore = sqrt(
+          (pow(nc - end.c, 2) + pow(nr - end.r, 2)).toDouble());
+      if (isTurning && distToCore < PathingRules.nearCoreStraightRadius) {
+        final turnBias = 1 - (distToCore / PathingRules.nearCoreStraightRadius);
+        cost += PathingRules.nearCoreTurnPenaltyBoost * turnBias;
+      }
+      cost += coreRepulsionPenalty(nc, nr, end.c, end.r);
 
-      if (tentativeG < (gScore[neighbor] ?? double.infinity)) {
-        cameFrom[neighbor] = current;
-        gScore[neighbor] = tentativeG;
-        fScore[neighbor] =
-            tentativeG + _heuristic(neighbor, end);
-        openSet.add(neighbor);
+      final g = current.g + cost;
+      final stateKey = '$nc,$nr,${nextEnteredZone0 ? 1 : 0}';
+      final closedG = closedSet[stateKey];
+      if (closedG != null && closedG <= g) continue;
 
-        if (neighborInZone0) enteredZone0.add(neighbor);
+      var inOpen = false;
+      for (final node in openSet) {
+        if (node.c == nc &&
+            node.r == nr &&
+            node.enteredZone0 == nextEnteredZone0) {
+          if (node.g > g) {
+            node.g = g;
+            node.f = g + node.h;
+            node.parent = current;
+            node.dc = dc;
+            node.dr = dr;
+            node.enteredZone0 = nextEnteredZone0;
+          }
+          inOpen = true;
+          break;
+        }
+      }
+
+      if (!inOpen) {
+        final h = heuristic(nc, nr);
+        openSet.add(_Node(
+          c: nc,
+          r: nr,
+          g: g,
+          h: h,
+          f: g + h,
+          parent: current,
+          dc: dc,
+          dr: dr,
+          enteredZone0: nextEnteredZone0,
+        ));
       }
     }
   }
-
-  return const AStarResult([], false);
-}
-
-double _heuristic(GridPoint a, GridPoint b) {
-  return (a.col - b.col).abs().toDouble() + (a.row - b.row).abs().toDouble();
-}
-
-double _cost(
-  GridPoint from,
-  GridPoint to,
-  int coreCenterCol,
-  int coreCenterRow,
-  int zone0RadiusCells,
-) {
-  double cost = 1.0;
-
-  // Turn penalty
-  // (we don't have previous direction here, handled at neighbor level — simplified)
-
-  // Core repulsion penalty (within 9 cells of core)
-  const double repulsionRadius = 9.0;
-  const double maxRepulsionPenalty = 14.0;
-  final distToCore = sqrt(pow(to.col - coreCenterCol, 2) + pow(to.row - coreCenterRow, 2));
-  if (distToCore < repulsionRadius) {
-    final t = 1.0 - distToCore / repulsionRadius;
-    cost += maxRepulsionPenalty * t * t;
-  }
-
-  return cost;
-}
-
-bool _inZone0(
-    GridPoint p, int coreCenterCol, int coreCenterRow, int zone0RadiusCells) {
-  final d = sqrt(
-      pow(p.col - coreCenterCol, 2) + pow(p.row - coreCenterRow, 2));
-  return d <= zone0RadiusCells;
-}
-
-List<GridPoint> _neighbors(GridPoint p, int cols, int rows) {
-  final result = <GridPoint>[];
-  const dirs = [
-    (1, 0), (-1, 0), (0, 1), (0, -1),
-  ];
-  for (final d in dirs) {
-    final nc = p.col + d.$1;
-    final nr = p.row + d.$2;
-    if (nc >= 0 && nc < cols && nr >= 0 && nr < rows) {
-      result.add(GridPoint(nc, nr));
-    }
-  }
-  return result;
-}
-
-List<GridPoint> _reconstructPath(
-    Map<GridPoint, GridPoint> cameFrom, GridPoint current) {
-  final path = [current];
-  GridPoint? node = current;
-  while (cameFrom.containsKey(node)) {
-    node = cameFrom[node]!;
-    path.insert(0, node);
-  }
-  return path;
+  return null;
 }

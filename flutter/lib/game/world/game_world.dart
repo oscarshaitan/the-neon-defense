@@ -13,6 +13,7 @@ import '../systems/quality_governor.dart';
 import '../vfx/particle_system.dart';
 import '../vfx/arc_lightning.dart';
 import '../vfx/light_source.dart';
+import '../vfx/placement_preview.dart';
 import '../entities/towers/tower.dart';
 import '../entities/enemies/enemy.dart';
 import '../entities/projectiles/projectile.dart';
@@ -34,6 +35,7 @@ class RenderLayers {
   static const int particles = 45;
   static const int abilityOverlays = 55;
   static const int lights = 60;
+  static const int placementPreview = 65;
 }
 
 class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
@@ -91,6 +93,7 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
       arcLightning,
       particles,
       qualityGovernor,
+      PlacementPreview()..priority = RenderLayers.placementPreview,
     ]);
   }
 
@@ -113,33 +116,76 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
 
   void activateAbility(AbilityType type) => abilitySystem.startTargeting(type);
 
-  void placeTower(Vector2 worldPos) {
-    final type = game.selection.selectedTowerType;
-    if (type == null) return;
-    final cost = kTowers[type]!.cost;
-    if (game.state.money.value < cost) return;
+  /// JS spawnSubUnits (05_loop.js:875-905): a dying splitter releases
+  /// 2-3 minis that inherit its path, progress, tier, and mutation.
+  void spawnMinis(Enemy parentEnemy) {
+    final rng = waveSystem.rng;
+    final miniCount = 2 + rng.nextInt(2);
+    final miniDef = kEnemies[EnemyType.mini]!;
 
-    final hp = hardpointManager.getNearestSnap(worldPos);
-    if (hp == null) return;
-    if (hp.occupied) return;
+    for (var i = 0; i < miniCount; i++) {
+      final offset = Vector2(
+        (rng.nextDouble() - 0.5) * 20,
+        (rng.nextDouble() - 0.5) * 20,
+      );
+      add(Enemy(
+        type: EnemyType.mini,
+        hp: parentEnemy.maxHp * 0.2,
+        speed: parentEnemy.speed * 1.5,
+        color: parentEnemy.color,
+        reward: miniDef.reward,
+        width: miniDef.width,
+        path: parentEnemy.path,
+        riftLevel: parentEnemy.riftLevel,
+        isMutant: parentEnemy.isMutant,
+        mutationKey: parentEnemy.mutationKey,
+        spatialGrid: spatialGrid,
+        spawnPos: parentEnemy.position + offset,
+        startPathIndex: parentEnemy.pathIndex,
+      ));
+    }
+  }
 
-    hp.occupied = true;
-    final placePos = hp.worldPos.clone();
-
-    game.state.money.value -= cost;
-    final tower = Tower(
-      position: placePos,
-      type: type,
-      spatialGrid: spatialGrid,
-      hardpoint: hp,
-    );
-    add(tower);
-    game.selection.selectTowerType(null);
+  /// JS generateNewPath tower destruction (04_tutorial.js:609-632): a new
+  /// rift destroys overlapping non-hardpoint towers with a 70% refund.
+  void destroyTowersOnPath(List<Vector2> pathPoints) {
+    final tolerance = kGridSize / 2;
+    final doomed = <Tower>[];
+    for (final t in game.entities.towers) {
+      if (t.hardpoint != null) continue;
+      for (var j = 0; j < pathPoints.length - 1; j++) {
+        final p1 = pathPoints[j];
+        final p2 = pathPoints[j + 1];
+        var hit = false;
+        if ((p1.y - p2.y).abs() < 1) {
+          // Horizontal
+          hit = (t.position.y - p1.y).abs() < tolerance &&
+              t.position.x >= (p1.x < p2.x ? p1.x : p2.x) - tolerance &&
+              t.position.x <= (p1.x > p2.x ? p1.x : p2.x) + tolerance;
+        } else {
+          // Vertical
+          hit = (t.position.x - p1.x).abs() < tolerance &&
+              t.position.y >= (p1.y < p2.y ? p1.y : p2.y) - tolerance &&
+              t.position.y <= (p1.y > p2.y ? p1.y : p2.y) + tolerance;
+        }
+        if (hit) {
+          doomed.add(t);
+          break;
+        }
+      }
+    }
+    for (final t in doomed) {
+      game.state.money.value +=
+          (t.baseCost * t.level * 0.7).floorToDouble();
+      removeTower(t);
+    }
   }
 
   void removeTower(Tower t) {
     t.hardpoint?.occupied = false;
-    game.selection.selectTower(null);
+    if (game.selection.selectedTower == t) {
+      game.selection.selectTower(null);
+    }
     t.removeFromParent();
   }
 

@@ -10,6 +10,7 @@ import 'input/input_router.dart';
 import 'state/entity_registry.dart';
 import 'state/game_state.dart';
 import 'state/selection_state.dart';
+import 'systems/placement_system.dart';
 import 'systems/save_system.dart';
 
 class NeonDefenseGame extends FlameGame
@@ -19,6 +20,7 @@ class NeonDefenseGame extends FlameGame
   final AudioManager audio = AudioManager();
   late SaveSystem saveSystem;
   late InputRouter inputRouter;
+  late PlacementSystem placement;
 
   final GameState state = GameState();
   final SelectionState selection = SelectionState();
@@ -39,6 +41,7 @@ class NeonDefenseGame extends FlameGame
     gameCamera = GameCamera(this);
     gameWorld = GameWorld(this);
     inputRouter = InputRouter(this);
+    placement = PlacementSystem(this);
 
     saveSystem = SaveSystem(this);
     await audio.init();
@@ -83,16 +86,16 @@ class NeonDefenseGame extends FlameGame
   void handleKeyDown(LogicalKeyboardKey key) {
     switch (key) {
       case LogicalKeyboardKey.keyQ:
-        selection.selectTowerType(TowerType.basic);
+        chooseTowerType(TowerType.basic);
         break;
       case LogicalKeyboardKey.keyW:
-        selection.selectTowerType(TowerType.rapid);
+        chooseTowerType(TowerType.rapid);
         break;
       case LogicalKeyboardKey.keyE:
-        selection.selectTowerType(TowerType.sniper);
+        chooseTowerType(TowerType.sniper);
         break;
       case LogicalKeyboardKey.keyR:
-        selection.selectTowerType(TowerType.arc);
+        chooseTowerType(TowerType.arc);
         break;
       case LogicalKeyboardKey.escape:
         selection.clear();
@@ -100,6 +103,18 @@ class NeonDefenseGame extends FlameGame
       default:
         break;
     }
+  }
+
+  /// JS window.selectTower (04_tutorial.js:768-786): with a build target
+  /// chosen, picking a tower type builds there immediately; otherwise it
+  /// just arms the type.
+  void chooseTowerType(TowerType type) {
+    final target = selection.buildTarget;
+    if (target != null) {
+      placement.buildTower(target, type);
+      return;
+    }
+    selection.selectTowerType(type);
   }
 
   void togglePause() {

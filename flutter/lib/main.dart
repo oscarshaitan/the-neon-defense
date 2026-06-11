@@ -131,10 +131,7 @@ class _HudLayerState extends State<_HudLayer> {
         AbilitiesBar(game: game),
         ListenableBuilder(
           listenable: game.selection,
-          builder: (_, child) => SelectionPanel(
-            game: game,
-            selectedTower: game.selection.selectedTower,
-          ),
+          builder: (_, child) => SelectionPanel(game: game),
         ),
         // Recenter button — bottom-right circle, matches JS #recenter-btn
         SafeArea(
