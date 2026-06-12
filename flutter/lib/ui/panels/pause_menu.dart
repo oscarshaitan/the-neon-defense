@@ -18,7 +18,11 @@ class _PauseMenuState extends State<PauseMenu> {
     return Scaffold(
       backgroundColor: const Color(0xCC050510),
       body: Center(
-        child: Container(
+        // Scrollable so the full menu stays reachable on short landscape
+        // phone viewports.
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: const Color(0xFF050510),
@@ -54,6 +58,7 @@ class _PauseMenuState extends State<PauseMenu> {
               const SizedBox(height: 12),
               _qualityRow(),
             ],
+          ),
           ),
         ),
       ),

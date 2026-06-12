@@ -40,9 +40,10 @@ class WaveIntelPanel extends StatelessWidget {
           child: Align(
             alignment: Alignment.topLeft,
             child: Container(
-              margin: const EdgeInsets.only(top: 64, left: 10),
+              margin: const EdgeInsets.only(top: 64, left: 10, bottom: 12),
               padding: const EdgeInsets.all(14),
               width: 250,
+              constraints: const BoxConstraints(maxHeight: 420),
               decoration: BoxDecoration(
                 color: const Color(0xF0050510),
                 borderRadius: BorderRadius.circular(8),
@@ -51,7 +52,8 @@ class WaveIntelPanel extends StatelessWidget {
                   BoxShadow(color: Color(0x5500F3FF), blurRadius: 14),
                 ],
               ),
-              child: Column(
+              child: SingleChildScrollView(
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -161,6 +163,7 @@ class WaveIntelPanel extends StatelessWidget {
                     ],
                   ),
                 ],
+              ),
               ),
             ),
           ),

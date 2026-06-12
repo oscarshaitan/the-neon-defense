@@ -28,6 +28,15 @@ void main() {
 class NeonDefenseApp extends StatelessWidget {
   const NeonDefenseApp({super.key});
 
+  /// Overlay builders shared by the app and the UI render tests.
+  static Map<String, Widget Function(BuildContext, NeonDefenseGame)>
+      overlayBuilders() => {
+            'startScreen': (_, game) => StartScreen(game: game),
+            'gameOverScreen': (_, game) => GameOverScreen(game: game),
+            'hud': (_, game) => _HudLayer(game: game),
+            'pauseMenu': (_, game) => PauseMenu(game: game),
+          };
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -82,12 +91,7 @@ class _GamePageState extends State<_GamePage> {
       onKeyEvent: _onKey,
       child: GameWidget<NeonDefenseGame>(
         game: _game,
-        overlayBuilderMap: {
-          'startScreen': (_, game) => StartScreen(game: game),
-          'gameOverScreen': (_, game) => GameOverScreen(game: game),
-          'hud': (_, game) => _HudLayer(game: game),
-          'pauseMenu': (_, game) => PauseMenu(game: game),
-        },
+        overlayBuilderMap: NeonDefenseApp.overlayBuilders(),
         initialActiveOverlays: const ['startScreen'],
       ),
     );

@@ -71,7 +71,8 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
     if (!tutorial.active) return const SizedBox.shrink();
 
     final box = Container(
-      width: 420,
+      constraints: const BoxConstraints(maxWidth: 420),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xF2050510),

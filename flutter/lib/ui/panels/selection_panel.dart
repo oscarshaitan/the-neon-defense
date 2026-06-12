@@ -30,9 +30,10 @@ class SelectionPanel extends StatelessWidget {
       child: Align(
         alignment: Alignment.bottomLeft,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 20, left: 10),
+          margin: const EdgeInsets.only(bottom: 20, left: 10, top: 60),
           padding: const EdgeInsets.all(14),
           width: 200,
+          constraints: const BoxConstraints(maxHeight: 320),
           decoration: BoxDecoration(
             color: const Color(0xF0050510),
             borderRadius: BorderRadius.circular(10),
@@ -45,7 +46,7 @@ class SelectionPanel extends StatelessWidget {
                   spreadRadius: -2),
             ],
           ),
-          child: body,
+          child: SingleChildScrollView(child: body),
         ),
       ),
     );
