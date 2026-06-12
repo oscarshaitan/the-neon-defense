@@ -139,6 +139,23 @@
             transform: translateY(-2px);
         }
 
+        /* Godot button — green */
+        .btn-godot {
+            color: var(--neon-green);
+            border-color: rgba(0, 255, 65, 0.6);
+            box-shadow:
+                0 0 16px rgba(0, 255, 65, 0.2),
+                inset 0 0 16px rgba(0, 255, 65, 0.04);
+        }
+
+        .btn-godot:hover {
+            border-color: var(--neon-green);
+            box-shadow:
+                0 0 32px rgba(0, 255, 65, 0.5),
+                inset 0 0 24px rgba(0, 255, 65, 0.1);
+            transform: translateY(-2px);
+        }
+
         .version {
             position: fixed;
             bottom: 1.5rem;
@@ -168,16 +185,6 @@
         .footer-links a:hover {
             color: var(--neon-blue);
         }
-
-        .badge-wip {
-            font-size: 0.5rem;
-            font-weight: 700;
-            letter-spacing: 0.2em;
-            color: var(--bg-color);
-            background: var(--neon-pink);
-            padding: 0.15em 0.5em;
-            box-shadow: 0 0 8px rgba(255, 0, 172, 0.6);
-        }
 </style>
 </head>
 
@@ -193,9 +200,13 @@
         </a>
 
         <a class="btn btn-flutter" href="./flutter/build/web/index.html">
-            <span class="badge-wip">WIP</span>
             <span>App</span>
             <span class="btn-label">Flutter</span>
+        </a>
+
+        <a class="btn btn-godot" href="./godot/build/web/index.html">
+            <span>Engine</span>
+            <span class="btn-label">Godot</span>
         </a>
     </div>
 
