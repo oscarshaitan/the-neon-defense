@@ -10,6 +10,10 @@ class TileGrid extends Component {
   late final double worldWidth;
   late final double worldHeight;
 
+  /// The grid is static geometry (~470 line strokes); it is recorded into a
+  /// Picture once and replayed per frame instead of issuing every stroke.
+  Picture? _gridPicture;
+
   // Match JS exactly: rgba(255, 255, 255, 0.08) — white, not blue
   static final Paint _gridPaint = Paint()
     ..color = const Color(0x14FFFFFF)
@@ -21,8 +25,10 @@ class TileGrid extends Component {
     worldHeight = rows * kGridSize;
   }
 
-  @override
-  void render(Canvas canvas) {
+  Picture _buildGridPicture() {
+    final recorder = PictureRecorder();
+    final canvas = Canvas(recorder);
+
     // Extend grid well beyond world bounds to appear infinite at any zoom level
     const extra = kGridSize * 60.0;
     final startX = -extra;
@@ -43,6 +49,13 @@ class TileGrid extends Component {
       final y = r * kGridSize;
       canvas.drawLine(Offset(startX, y), Offset(endX, y), _gridPaint);
     }
+    return recorder.endRecording();
+  }
+
+  @override
+  void render(Canvas canvas) {
+    _gridPicture ??= _buildGridPicture();
+    canvas.drawPicture(_gridPicture!);
   }
 
   // Convert world position to grid cell (col, row)

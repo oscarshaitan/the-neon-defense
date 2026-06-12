@@ -1,5 +1,43 @@
 // --- Rendering ---
 
+// --- Sprite caches (C5-21) ---
+// shadowBlur is the most expensive canvas2d operation; static glowing
+// elements (grid, hardpoints, towers, rift spawn discs) are pre-rendered
+// once into small offscreen canvases and stamped with drawImage each frame.
+// Camera zoom is capped at 1.0, so sprites are only ever downscaled.
+const _spriteCache = new Map();
+function getCachedSprite(key, size, painter) {
+    let sprite = _spriteCache.get(key);
+    if (!sprite) {
+        const c = document.createElement('canvas');
+        c.width = size;
+        c.height = size;
+        painter(c.getContext('2d'), size);
+        sprite = c;
+        _spriteCache.set(key, sprite);
+    }
+    return sprite;
+}
+
+let _gridPattern = null;
+function getGridPattern() {
+    if (_gridPattern) return _gridPattern;
+    const tile = document.createElement('canvas');
+    tile.width = GRID_SIZE;
+    tile.height = GRID_SIZE;
+    const tctx = tile.getContext('2d');
+    tctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    tctx.lineWidth = 1;
+    tctx.beginPath();
+    tctx.moveTo(0.5, 0);
+    tctx.lineTo(0.5, GRID_SIZE);
+    tctx.moveTo(0, 0.5);
+    tctx.lineTo(GRID_SIZE, 0.5);
+    tctx.stroke();
+    _gridPattern = ctx.createPattern(tile, 'repeat');
+    return _gridPattern;
+}
+
 // Pre-allocated intensity buckets for arc link batching (reused each frame, no GC).
 // Index 0..4 corresponds to intensity levels 1..5 (ARC_TOWER_RULES.maxBonus).
 const _linkBuckets = [[], [], [], [], []];
@@ -115,21 +153,11 @@ function draw() {
     const viewMinY = startY - viewCullMargin;
     const viewMaxY = endY + viewCullMargin;
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)'; // Slightly fainter for infinite grid
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-
-    // Vertical lines
-    for (let x = startX; x <= endX; x += GRID_SIZE) {
-        ctx.moveTo(x, startY);
-        ctx.lineTo(x, endY);
-    }
-    // Horizontal lines
-    for (let y = startY; y <= endY; y += GRID_SIZE) {
-        ctx.moveTo(startX, y);
-        ctx.lineTo(endX, y);
-    }
-    ctx.stroke();
+    // Grid as a repeating pattern tile (C5-21): one fill instead of ~470
+    // line strokes per frame. startX/startY are GRID_SIZE multiples, so the
+    // pattern stays aligned with world cells under the camera transform.
+    ctx.fillStyle = getGridPattern();
+    ctx.fillRect(startX, startY, endX - startX, endY - startY);
 
     const perfDrawWorld = perfBegin('drawWorld');
 
@@ -220,18 +248,24 @@ function draw() {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Spawn Point
+        // Spawn Point — pre-rendered glow disc (C5-21), scaled by the pulse
+        // so the per-frame shadowBlur disappears.
         const spawn = path[0];
         const pulse = 1 + Math.sin(frameCount * 0.1) * 0.2;
-        ctx.shadowBlur = 20 * pulse;
-
         const spawnColor = mutation ? mutation.color : (riftLevel > 1 ? '#ff00ac' : '#ff4444');
-        ctx.shadowColor = spawnColor;
-        ctx.fillStyle = spawnColor;
-
-        ctx.beginPath();
-        ctx.arc(spawn.x, spawn.y, 20 * (riftLevel > 1 || mutation ? 1.5 : 1) * pulse, 0, Math.PI * 2);
-        ctx.fill();
+        const baseR = 20 * (riftLevel > 1 || mutation ? 1.5 : 1);
+        const discPad = 26; // room for the baked 20px glow
+        const discSize = (baseR + discPad) * 2;
+        const discSprite = getCachedSprite(`spawn_${spawnColor}_${baseR}`, discSize, (sctx, size) => {
+            sctx.shadowBlur = 20;
+            sctx.shadowColor = spawnColor;
+            sctx.fillStyle = spawnColor;
+            sctx.beginPath();
+            sctx.arc(size / 2, size / 2, baseR, 0, Math.PI * 2);
+            sctx.fill();
+        });
+        const drawSize = discSize * pulse;
+        ctx.drawImage(discSprite, spawn.x - drawSize / 2, spawn.y - drawSize / 2, drawSize, drawSize);
 
         // Inner core
         ctx.fillStyle = '#000';
@@ -833,77 +867,92 @@ function drawHardpoints() {
         const isSelected = activeBuildKey === key;
         const isCore = hp.type === 'core';
 
-        const radius = isCore ? GRID_SIZE * 0.36 : GRID_SIZE * 0.25;
-        const ringColor = isCore ? '#00ff41' : '#fcee0a';
-        const fillColor = isCore ? 'rgba(0, 255, 65, 0.09)' : 'rgba(252, 238, 10, 0.08)';
+        // Pre-rendered slot sprite (C5-21): blurred ring + crosshair baked
+        // once per (type, occupied, selected) state — 6 sprites total.
+        const spriteSize = 80;
+        const sprite = getCachedSprite(
+            `hp_${hp.type}_${isOccupied ? 1 : 0}_${isSelected ? 1 : 0}`,
+            spriteSize,
+            (sctx, size) => {
+                const cx = size / 2;
+                const radius = isCore ? GRID_SIZE * 0.36 : GRID_SIZE * 0.25;
+                const ringColor = isCore ? '#00ff41' : '#fcee0a';
+                const fillColor = isCore ? 'rgba(0, 255, 65, 0.09)' : 'rgba(252, 238, 10, 0.08)';
 
-        ctx.save();
-        ctx.shadowBlur = isSelected ? 18 : 10;
-        ctx.shadowColor = ringColor;
-        ctx.lineWidth = isSelected ? 3 : (isCore ? 2.4 : 1.8);
-        ctx.strokeStyle = isOccupied ? 'rgba(255,255,255,0.3)' : ringColor;
-        ctx.fillStyle = isOccupied ? 'rgba(255,255,255,0.06)' : fillColor;
+                sctx.shadowBlur = isSelected ? 18 : 10;
+                sctx.shadowColor = ringColor;
+                sctx.lineWidth = isSelected ? 3 : (isCore ? 2.4 : 1.8);
+                sctx.strokeStyle = isOccupied ? 'rgba(255,255,255,0.3)' : ringColor;
+                sctx.fillStyle = isOccupied ? 'rgba(255,255,255,0.06)' : fillColor;
 
-        ctx.beginPath();
-        ctx.arc(hp.x, hp.y, radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+                sctx.beginPath();
+                sctx.arc(cx, cx, radius, 0, Math.PI * 2);
+                sctx.fill();
+                sctx.stroke();
 
-        if (!isOccupied) {
-            ctx.beginPath();
-            ctx.moveTo(hp.x - radius * 0.45, hp.y);
-            ctx.lineTo(hp.x + radius * 0.45, hp.y);
-            ctx.moveTo(hp.x, hp.y - radius * 0.45);
-            ctx.lineTo(hp.x, hp.y + radius * 0.45);
-            ctx.lineWidth = 1.2;
-            ctx.strokeStyle = isCore ? 'rgba(0, 255, 65, 0.75)' : 'rgba(252, 238, 10, 0.65)';
-            ctx.stroke();
-        }
-
-        ctx.restore();
+                if (!isOccupied) {
+                    sctx.shadowBlur = 0;
+                    sctx.beginPath();
+                    sctx.moveTo(cx - radius * 0.45, cx);
+                    sctx.lineTo(cx + radius * 0.45, cx);
+                    sctx.moveTo(cx, cx - radius * 0.45);
+                    sctx.lineTo(cx, cx + radius * 0.45);
+                    sctx.lineWidth = 1.2;
+                    sctx.strokeStyle = isCore ? 'rgba(0, 255, 65, 0.75)' : 'rgba(252, 238, 10, 0.65)';
+                    sctx.stroke();
+                }
+            });
+        ctx.drawImage(sprite, hp.x - spriteSize / 2, hp.y - spriteSize / 2);
     }
 }
 
 function drawTowerOne(type, x, y, color, scale = 1) {
-    ctx.fillStyle = color;
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = color;
+    // Pre-rendered tower sprite (C5-21): silhouette + 15px glow baked once
+    // per (type, color, scale) — towers and ghost previews stamp it with
+    // drawImage instead of paying shadowBlur per tower per frame.
     const s = Math.max(0.5, scale || 1);
+    const spriteSize = Math.ceil(30 * s + 36);
+    const sprite = getCachedSprite(
+        `tower_${type}_${color}_${s.toFixed(2)}`,
+        spriteSize,
+        (sctx, size) => {
+            const cx = size / 2;
+            sctx.fillStyle = color;
+            sctx.shadowBlur = 15;
+            sctx.shadowColor = color;
 
-    ctx.beginPath();
-    if (type === 'basic') {
-        // Square
-        ctx.rect(x - 13 * s, y - 13 * s, 26 * s, 26 * s);
-    } else if (type === 'rapid') {
-        // Circle
-        ctx.arc(x, y, 13 * s, 0, Math.PI * 2);
-    } else if (type === 'sniper') {
-        // Diamond (Rotated Square)
-        ctx.moveTo(x, y - 15 * s);
-        ctx.lineTo(x + 15 * s, y);
-        ctx.lineTo(x, y + 15 * s);
-        ctx.lineTo(x - 15 * s, y);
-    } else if (type === 'arc') {
-        // Hex shell + core for an electric relay look
-        for (let i = 0; i < 6; i++) {
-            const a = (Math.PI * 2 * i / 6) - Math.PI / 2;
-            const px = x + Math.cos(a) * 14 * s;
-            const py = y + Math.sin(a) * 14 * s;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-    }
-    ctx.fill();
+            sctx.beginPath();
+            if (type === 'basic') {
+                sctx.rect(cx - 13 * s, cx - 13 * s, 26 * s, 26 * s);
+            } else if (type === 'rapid') {
+                sctx.arc(cx, cx, 13 * s, 0, Math.PI * 2);
+            } else if (type === 'sniper') {
+                sctx.moveTo(cx, cx - 15 * s);
+                sctx.lineTo(cx + 15 * s, cx);
+                sctx.lineTo(cx, cx + 15 * s);
+                sctx.lineTo(cx - 15 * s, cx);
+            } else if (type === 'arc') {
+                for (let i = 0; i < 6; i++) {
+                    const a = (Math.PI * 2 * i / 6) - Math.PI / 2;
+                    const px = cx + Math.cos(a) * 14 * s;
+                    const py = cx + Math.sin(a) * 14 * s;
+                    if (i === 0) sctx.moveTo(px, py);
+                    else sctx.lineTo(px, py);
+                }
+                sctx.closePath();
+            }
+            sctx.fill();
 
-    if (type === 'arc') {
-        ctx.fillStyle = '#e9f9ff';
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#b8ebff';
-        ctx.beginPath();
-        ctx.arc(x, y, 4 * s, 0, Math.PI * 2);
-        ctx.fill();
-    }
+            if (type === 'arc') {
+                sctx.fillStyle = '#e9f9ff';
+                sctx.shadowBlur = 10;
+                sctx.shadowColor = '#b8ebff';
+                sctx.beginPath();
+                sctx.arc(cx, cx, 4 * s, 0, Math.PI * 2);
+                sctx.fill();
+            }
+        });
+    ctx.drawImage(sprite, x - spriteSize / 2, y - spriteSize / 2);
 }
 
 function isWorldPointVisible(x, y, margin = 120) {

@@ -23,6 +23,24 @@ class CoreBase extends PositionComponent
   // Green (#00ff41) matching JS game
   static const _green = Color(0xFF00FF41);
 
+  // Static render resources — the base renders every frame.
+  static final Path _diamondPath = _diamond(18);
+  static final Paint _diamondGlowPaint = Paint()
+    ..color = _green
+    ..style = PaintingStyle.fill
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
+  static final Paint _diamondPaint = Paint()
+    ..color = _green
+    ..style = PaintingStyle.fill;
+  static final List<Paint> _shieldPaints = [
+    for (var j = 0; j < 4; j++)
+      Paint()
+        ..color = _green.withValues(alpha: (0.3 + j * 0.2).clamp(0, 1))
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+  ];
+  static final Paint _dronePaint = Paint()..color = const Color(0xFFFFFFFF);
+
   CoreBase({required Vector2 worldCenter, required this.spatialGrid})
       : super(
           position: worldCenter,
@@ -109,8 +127,6 @@ class CoreBase extends PositionComponent
 
   @override
   void render(Canvas canvas) {
-    const r = 18.0;
-
     // Selection ring + range indicator (JS 06_render.js:260-279).
     if (game.selection.selectedBase) {
       drawDashedCircle(
@@ -139,19 +155,8 @@ class CoreBase extends PositionComponent
     }
 
     // Glow layer + solid green diamond — matches JS exactly.
-    canvas.drawPath(
-      _diamond(r),
-      Paint()
-        ..color = _green
-        ..style = PaintingStyle.fill
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
-    );
-    canvas.drawPath(
-      _diamond(r),
-      Paint()
-        ..color = _green
-        ..style = PaintingStyle.fill,
-    );
+    canvas.drawPath(_diamondPath, _diamondGlowPaint);
+    canvas.drawPath(_diamondPath, _diamondPaint);
 
     // Turret visuals: rotating hex shield layers + orbiting drones
     // (JS 06_render.js:294-341).
@@ -174,17 +179,11 @@ class CoreBase extends PositionComponent
           }
         }
         path.close();
-        canvas.drawPath(
-          path,
-          Paint()
-            ..color = _green.withValues(alpha: (0.3 + j * 0.2).clamp(0, 1))
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5,
-        );
+        canvas.drawPath(path, _shieldPaints[j.clamp(0, 3)]);
       }
 
       // Orbiting defense drones — triangles in two orbits (r32 / r45).
-      final dronePaint = Paint()..color = const Color(0xFFFFFFFF);
+      final dronePaint = _dronePaint;
       for (var i = 0; i < level; i++) {
         final orbitIndex = i < 5 ? 0 : 1;
         final orbitCount = i < 5 ? min(level, 5) : level - 5;

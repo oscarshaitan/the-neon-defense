@@ -39,6 +39,12 @@ class HardpointManager extends Component {
   final List<Hardpoint> hardpoints = [];
   late final Vector2 coreWorldPos;
 
+  // The 30 hardpoints cost several blurred strokes each; their geometry only
+  // changes when occupancy flips, so the whole layer is recorded into a
+  // Picture and re-recorded only when the occupancy signature changes.
+  Picture? _picture;
+  int _pictureSignature = -1;
+
   HardpointManager(this.worldCols, this.worldRows);
 
   @override
@@ -91,11 +97,27 @@ class HardpointManager extends Component {
     }
   }
 
+  int _occupancySignature() {
+    var signature = 0;
+    for (var i = 0; i < hardpoints.length; i++) {
+      if (hardpoints[i].occupied) signature |= 1 << i;
+    }
+    return signature;
+  }
+
   @override
   void render(Canvas canvas) {
-    for (final hp in hardpoints) {
-      _renderHardpoint(canvas, hp);
+    final signature = _occupancySignature();
+    if (_picture == null || signature != _pictureSignature) {
+      final recorder = PictureRecorder();
+      final recordingCanvas = Canvas(recorder);
+      for (final hp in hardpoints) {
+        _renderHardpoint(recordingCanvas, hp);
+      }
+      _picture = recorder.endRecording();
+      _pictureSignature = signature;
     }
+    canvas.drawPicture(_picture!);
   }
 
   void _renderHardpoint(Canvas canvas, Hardpoint hp) {

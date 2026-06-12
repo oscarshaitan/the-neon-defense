@@ -27,7 +27,47 @@ class RiftPathRenderer extends Component
   final WaveSystem waveSystem;
   final Expando<_RiftGeometry> _geometryCache = Expando();
 
+  // Paint caches — keys combine color and the few discrete style states.
+  final Map<int, Paint> _glowPaints = {};
+  final Map<int, Paint> _centerPaints = {};
+  final Map<int, Paint> _spawnGlowPaints = {};
+  final Map<int, Paint> _fillPaints = {};
+
   RiftPathRenderer(this.waveSystem);
+
+  Paint _glowPaint(Color color, int alpha, bool highlighted) =>
+      _glowPaints.putIfAbsent(
+          Object.hash(color.toARGB32(), alpha, highlighted),
+          () => Paint()
+            ..color = color.withAlpha(alpha)
+            ..strokeWidth = kGridSize * (highlighted ? 1.6 : 0.8)
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round
+            ..maskFilter =
+                MaskFilter.blur(BlurStyle.normal, highlighted ? 16 : 8));
+
+  Paint _centerPaint(Color color, bool highlighted) =>
+      _centerPaints.putIfAbsent(Object.hash(color.toARGB32(), highlighted),
+          () => Paint()
+            ..color = color
+            ..strokeWidth = highlighted ? 4.0 : 2.0
+            ..style = PaintingStyle.stroke);
+
+  /// Spawn glow blur scales with the pulse; quantizing it to half-pixel
+  /// steps keeps the cache tiny while staying visually identical.
+  Paint _spawnGlowPaint(Color color, double blur) {
+    final quantized = (blur * 2).round();
+    return _spawnGlowPaints.putIfAbsent(
+        Object.hash(color.toARGB32(), quantized),
+        () => Paint()
+          ..color = color
+          ..maskFilter =
+              MaskFilter.blur(BlurStyle.normal, quantized / 2));
+  }
+
+  Paint _fillPaint(Color color) => _fillPaints.putIfAbsent(
+      color.toARGB32(), () => Paint()..color = color);
 
   _RiftGeometry _geometryFor(RiftPath rift, List<Vector2> points) {
     final cached = _geometryCache[rift];
@@ -80,26 +120,12 @@ class RiftPathRenderer extends Component
       final glowAlpha = isHighlighted
           ? 0x33
           : (mutation != null ? 0x11 : (riftLevel > 1 ? 0x1A : 0x0D));
-      canvas.drawPath(
-        geometry.fullPath,
-        Paint()
-          ..color = lineColor.withAlpha(glowAlpha)
-          ..strokeWidth = kGridSize * (isHighlighted ? 1.6 : 0.8)
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round
-          ..maskFilter = MaskFilter.blur(
-              BlurStyle.normal, isHighlighted ? 16 : 8),
-      );
+      canvas.drawPath(geometry.fullPath,
+          _glowPaint(lineColor, glowAlpha, isHighlighted));
 
       // 2. Dashed center line [10,10] — one drawPath on cached segments.
       canvas.drawPath(
-        geometry.dashedCenter,
-        Paint()
-          ..color = lineColor
-          ..strokeWidth = isHighlighted ? 4.0 : 2.0
-          ..style = PaintingStyle.stroke,
-      );
+          geometry.dashedCenter, _centerPaint(lineColor, isHighlighted));
 
       // 3. Spawn disc — pulse 1 + sin(frameCount*0.1)*0.2; tier-2+/mutated
       // rifts use 1.5x size and their own color.
@@ -110,17 +136,12 @@ class RiftPathRenderer extends Component
       final spawnRadius =
           20 * (riftLevel > 1 || mutation != null ? 1.5 : 1.0) * pulse;
 
+      canvas.drawCircle(Offset(spawn.x, spawn.y), spawnRadius,
+          _spawnGlowPaint(spawnColor, 10 * pulse));
       canvas.drawCircle(
-        Offset(spawn.x, spawn.y),
-        spawnRadius,
-        Paint()
-          ..color = spawnColor
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 10 * pulse),
-      );
-      canvas.drawCircle(
-          Offset(spawn.x, spawn.y), spawnRadius, Paint()..color = spawnColor);
+          Offset(spawn.x, spawn.y), spawnRadius, _fillPaint(spawnColor));
       canvas.drawCircle(Offset(spawn.x, spawn.y), 10,
-          Paint()..color = const Color(0xFF000000));
+          _fillPaint(const Color(0xFF000000)));
 
       // Level pips below the spawn (aligned with the tower pip system).
       if (riftLevel > 1) {

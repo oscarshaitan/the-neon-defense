@@ -50,6 +50,37 @@ final Paint _stunSpokePaint = Paint()
   ..color = const Color(0xE5C4ECFF)
   ..strokeWidth = 1.6;
 
+// Static body silhouettes (origin-centered) — geometry never changes, so
+// building a Path per enemy per frame is pure allocation waste.
+final Path _fastKitePath = Path()
+  ..moveTo(0, -12)
+  ..lineTo(6, 0)
+  ..lineTo(0, 8)
+  ..lineTo(-6, 0)
+  ..close();
+final Path _splitterTrianglePath = Path()
+  ..moveTo(0, -14)
+  ..lineTo(12, 10)
+  ..lineTo(-12, 10)
+  ..close();
+final Map<int, Path> _hexPathCache = {};
+
+Path _hexPathFor(double radius) =>
+    _hexPathCache.putIfAbsent((radius * 4).round(), () {
+      final path = Path();
+      for (var i = 0; i < 6; i++) {
+        final a = pi * 2 * i / 6;
+        final px = radius * cos(a);
+        final py = radius * sin(a);
+        if (i == 0) {
+          path.moveTo(px, py);
+        } else {
+          path.lineTo(px, py);
+        }
+      }
+      return path..close();
+    });
+
 class Enemy extends PositionComponent
     with HasGameReference<NeonDefenseGame> {
   final EnemyType type;
@@ -236,40 +267,13 @@ class Enemy extends PositionComponent
             Rect.fromLTWH(-10, -10, 20, 20), bodyPaint);
         break;
       case EnemyType.fast:
-        canvas.drawPath(
-          Path()
-            ..moveTo(0, -12)
-            ..lineTo(6, 0)
-            ..lineTo(0, 8)
-            ..lineTo(-6, 0)
-            ..close(),
-          bodyPaint,
-        );
+        canvas.drawPath(_fastKitePath, bodyPaint);
         break;
       case EnemyType.boss:
-        final path = Path();
-        for (var i = 0; i < 6; i++) {
-          final a = pi * 2 * i / 6;
-          final px = halfW * cos(a);
-          final py = halfW * sin(a);
-          if (i == 0) {
-            path.moveTo(px, py);
-          } else {
-            path.lineTo(px, py);
-          }
-        }
-        path.close();
-        canvas.drawPath(path, bodyPaint);
+        canvas.drawPath(_hexPathFor(halfW), bodyPaint);
         break;
       case EnemyType.splitter:
-        canvas.drawPath(
-          Path()
-            ..moveTo(0, -14)
-            ..lineTo(12, 10)
-            ..lineTo(-12, 10)
-            ..close(),
-          bodyPaint,
-        );
+        canvas.drawPath(_splitterTrianglePath, bodyPaint);
         break;
       case EnemyType.mini:
         canvas.drawCircle(Offset.zero, 6, bodyPaint);

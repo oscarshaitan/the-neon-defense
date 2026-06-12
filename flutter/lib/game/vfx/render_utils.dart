@@ -6,6 +6,10 @@ import 'package:flutter/painting.dart'
 
 import '../config/constants.dart';
 
+final Paint _pipPaint = Paint()
+  ..color = const Color(0xFFFFFFFF)
+  ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2);
+
 /// JS drawLevelPips (06_render.js:1146-1198): centered row of white
 /// diamonds (one per 5 levels) and dots (one per remaining level).
 void drawLevelPips(Canvas canvas, int level, double x, double y) {
@@ -20,9 +24,7 @@ void drawLevelPips(Canvas canvas, int level, double x, double y) {
   final totalItems = fives + ones;
   if (totalItems > 1) totalW += (totalItems - 1) * gap;
 
-  final paint = Paint()
-    ..color = const Color(0xFFFFFFFF)
-    ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2);
+  final paint = _pipPaint;
 
   var currentX = x - totalW / 2;
   for (var i = 0; i < fives; i++) {
@@ -44,6 +46,50 @@ void drawLevelPips(Canvas canvas, int level, double x, double y) {
   }
 }
 
+// Origin-centered tower silhouette paths cached per (type, scale) — the
+// geometry is static, so rebuilding sniper/arc Paths per tower per frame is
+// avoidable allocation churn. Paints are cached per (color, glow).
+final Map<int, Path> _towerPathCache = {};
+final Map<int, Paint> _towerPaintCache = {};
+
+Path _towerPath(TowerType type, double s) =>
+    _towerPathCache.putIfAbsent(Object.hash(type, (s * 100).round()), () {
+      switch (type) {
+        case TowerType.sniper:
+          return Path()
+            ..moveTo(0, -15 * s)
+            ..lineTo(15 * s, 0)
+            ..lineTo(0, 15 * s)
+            ..lineTo(-15 * s, 0)
+            ..close();
+        case TowerType.arc:
+          final path = Path();
+          for (var i = 0; i < 6; i++) {
+            final a = (pi * 2 * i / 6) - pi / 2;
+            final px = cos(a) * 14 * s;
+            final py = sin(a) * 14 * s;
+            if (i == 0) {
+              path.moveTo(px, py);
+            } else {
+              path.lineTo(px, py);
+            }
+          }
+          return path..close();
+        default:
+          throw ArgumentError('no cached path for $type');
+      }
+    });
+
+Paint _towerPaint(Color color, int alpha, bool glow) =>
+    _towerPaintCache.putIfAbsent(
+        Object.hash(color.toARGB32(), alpha, glow), () {
+      final paint = Paint()..color = color.withAlpha(alpha);
+      if (glow) {
+        paint.maskFilter = const MaskFilter.blur(BlurStyle.solid, 6);
+      }
+      return paint;
+    });
+
 /// JS drawTowerOne (06_render.js:867-907): exact tower silhouettes —
 /// basic 26x26 square, rapid r13 circle, sniper d15 diamond, arc r14 hex
 /// with a pale core dot.
@@ -58,10 +104,7 @@ void drawTowerShape(
   bool glow = true,
 }) {
   final s = max(0.5, scale);
-  final paint = Paint()..color = color.withAlpha(alpha);
-  if (glow) {
-    paint.maskFilter = const MaskFilter.blur(BlurStyle.solid, 6);
-  }
+  final paint = _towerPaint(color, alpha, glow);
 
   switch (type) {
     case TowerType.basic:
@@ -72,35 +115,18 @@ void drawTowerShape(
       canvas.drawCircle(Offset(x, y), 13 * s, paint);
       break;
     case TowerType.sniper:
-      canvas.drawPath(
-        Path()
-          ..moveTo(x, y - 15 * s)
-          ..lineTo(x + 15 * s, y)
-          ..lineTo(x, y + 15 * s)
-          ..lineTo(x - 15 * s, y)
-          ..close(),
-        paint,
-      );
-      break;
     case TowerType.arc:
-      final path = Path();
-      for (var i = 0; i < 6; i++) {
-        final a = (pi * 2 * i / 6) - pi / 2;
-        final px = x + cos(a) * 14 * s;
-        final py = y + sin(a) * 14 * s;
-        if (i == 0) {
-          path.moveTo(px, py);
-        } else {
-          path.lineTo(px, py);
-        }
+      canvas.save();
+      canvas.translate(x, y);
+      canvas.drawPath(_towerPath(type, s), paint);
+      if (type == TowerType.arc) {
+        canvas.drawCircle(
+          Offset.zero,
+          4 * s,
+          _towerPaint(const Color(0xFFE9F9FF), alpha, false),
+        );
       }
-      path.close();
-      canvas.drawPath(path, paint);
-      canvas.drawCircle(
-        Offset(x, y),
-        4 * s,
-        Paint()..color = const Color(0xFFE9F9FF).withAlpha(alpha),
-      );
+      canvas.restore();
       break;
   }
 }

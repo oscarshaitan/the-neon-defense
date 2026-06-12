@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flame/components.dart';
 
@@ -80,32 +81,67 @@ class ParticleSystem extends Component {
     }
   }
 
+  // Persistent render staging: bucket coordinate buffers and paints are
+  // reused across frames (one drawRawPoints call per bucket instead of a
+  // drawRect per particle, and zero per-frame Map/List/Paint allocations).
+  final Map<int, _BucketBuffer> _renderBuckets = {};
+  final Map<int, Paint> _bucketPaints = {};
+
+  Paint _paintForBucket(int key) => _bucketPaints.putIfAbsent(key, () {
+        final alphaBucket = (key >> 24) & 0xFF;
+        final alpha =
+            (((alphaBucket + 1) / 8.0) * 255).round().clamp(0, 255);
+        final rgb = key & 0x00FFFFFF;
+        return Paint()
+          ..color = Color.fromARGB(
+              alpha, (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF)
+          // 3x3 squares via square stroke caps — matches JS rect(x, y, 3, 3).
+          ..strokeWidth = 3
+          ..strokeCap = StrokeCap.square
+          ..style = PaintingStyle.stroke;
+      });
+
   @override
   void render(Canvas canvas) {
-    // Batch by quantized alpha (8 levels) x color — one paint per bucket.
-    final buckets = <int, List<_Particle>>{};
+    for (final bucket in _renderBuckets.values) {
+      bucket.length = 0;
+    }
+
+    // Batch by quantized alpha (8 levels) x color.
     for (var i = 0; i < _poolSize; i++) {
       final p = _pool[i];
       if (!p.active) continue;
       final alphaBucket = ((p.life * 8).floor()).clamp(0, 7);
       final rgb = p.color.toARGB32() & 0x00FFFFFF;
       final key = rgb | (alphaBucket << 24);
-      buckets.putIfAbsent(key, () => []).add(p);
+      // Center of the JS 3x3 corner-anchored rect.
+      (_renderBuckets[key] ??= _BucketBuffer()).add(p.x + 1.5, p.y + 1.5);
     }
 
-    for (final entry in buckets.entries) {
-      final alphaBucket = (entry.key >> 24) & 0xFF;
-      final alpha = (((alphaBucket + 1) / 8.0) * 255).round().clamp(0, 255);
-      final rgb = entry.key & 0x00FFFFFF;
-      final paint = Paint()
-        ..color = Color.fromARGB(
-            alpha, (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF)
-        ..style = PaintingStyle.fill;
-
-      for (final p in entry.value) {
-        // JS: ctx.rect(p.x, p.y, 3, 3)
-        canvas.drawRect(Rect.fromLTWH(p.x, p.y, 3, 3), paint);
-      }
+    for (final entry in _renderBuckets.entries) {
+      final bucket = entry.value;
+      if (bucket.length == 0) continue;
+      canvas.drawRawPoints(
+        PointMode.points,
+        Float32List.sublistView(bucket.data, 0, bucket.length),
+        _paintForBucket(entry.key),
+      );
     }
+  }
+}
+
+/// Growable Float32List staging buffer reused across frames.
+class _BucketBuffer {
+  Float32List data = Float32List(64);
+  int length = 0;
+
+  void add(double x, double y) {
+    if (length + 2 > data.length) {
+      final grown = Float32List(data.length * 2);
+      grown.setRange(0, data.length, data);
+      data = grown;
+    }
+    data[length++] = x;
+    data[length++] = y;
   }
 }
