@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flame/components.dart' show Vector2;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -54,8 +55,23 @@ class SaveSystem {
   // Save
   // ---------------------------------------------------------------------------
 
+  Map<String, dynamic>? _pendingSnapshot;
+  bool _writeScheduled = false;
+
+  /// Snapshot state now, but defer the (potentially large) jsonEncode +
+  /// SharedPreferences write off the current frame — the JS version does
+  /// the same with requestIdleCallback({timeout: 5000})
+  /// (03_abilities.js:285-295). Saves issued within the deferral window
+  /// coalesce into one write of the most recent snapshot.
   Future<void> save() async {
-    final snapshot = _buildSnapshot();
+    _pendingSnapshot = _buildSnapshot();
+    if (_writeScheduled) return;
+    _writeScheduled = true;
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    _writeScheduled = false;
+    final snapshot = _pendingSnapshot;
+    _pendingSnapshot = null;
+    if (snapshot == null) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kSaveKey, jsonEncode(snapshot));
   }

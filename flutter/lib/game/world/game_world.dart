@@ -11,6 +11,7 @@ import '../systems/pathfinding/rift_generator.dart';
 import '../systems/wave_system.dart';
 import '../systems/spatial_grid.dart';
 import '../systems/ability_system.dart';
+import '../systems/placement_system.dart' show PlacementSystem;
 import '../systems/quality_governor.dart';
 import '../vfx/particle_system.dart';
 import '../vfx/arc_lightning.dart';
@@ -165,21 +166,8 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
     for (final t in game.entities.towers) {
       if (t.hardpoint != null) continue;
       for (var j = 0; j < pathPoints.length - 1; j++) {
-        final p1 = pathPoints[j];
-        final p2 = pathPoints[j + 1];
-        var hit = false;
-        if ((p1.y - p2.y).abs() < 1) {
-          // Horizontal
-          hit = (t.position.y - p1.y).abs() < tolerance &&
-              t.position.x >= (p1.x < p2.x ? p1.x : p2.x) - tolerance &&
-              t.position.x <= (p1.x > p2.x ? p1.x : p2.x) + tolerance;
-        } else {
-          // Vertical
-          hit = (t.position.x - p1.x).abs() < tolerance &&
-              t.position.y >= (p1.y < p2.y ? p1.y : p2.y) - tolerance &&
-              t.position.y <= (p1.y > p2.y ? p1.y : p2.y) + tolerance;
-        }
-        if (hit) {
+        if (PlacementSystem.segmentBoxHit(
+            t.position, pathPoints[j], pathPoints[j + 1], tolerance)) {
           doomed.add(t);
           break;
         }
@@ -202,6 +190,11 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
     t.removeFromParent();
   }
 
+  /// Must only be called while gameplay is halted (game over, pause-menu
+  /// reset, or save load) with isWaveActive already false: the registry and
+  /// spatial grid are cleared synchronously here, while Flame drains the
+  /// component-removal queue a frame later — wave-end checks running in
+  /// that window would see an empty registry.
   void reset() {
     removeWhere((c) => c is Tower || c is Enemy || c is Projectile);
     game.entities.clear();

@@ -45,16 +45,6 @@ class TileGrid extends Component {
     }
   }
 
-  // Snap a world position to the nearest grid cell center
-  Vector2 snapToGrid(Vector2 worldPos) {
-    final col = (worldPos.x / kGridSize).floor();
-    final row = (worldPos.y / kGridSize).floor();
-    return Vector2(
-      col * kGridSize + kGridSize / 2,
-      row * kGridSize + kGridSize / 2,
-    );
-  }
-
   // Convert world position to grid cell (col, row)
   (int col, int row) worldToCell(Vector2 worldPos) {
     return (

@@ -95,7 +95,7 @@ class QualityGovernor extends Component
     lights.setProfile(profile);
     // JS showQualityToast: "AUTO: DETAILS -> MED".
     if (autoAdjust && isMounted) {
-      game.state.toast.value = 'AUTO: DETAILS → ${_label(profile)}';
+      game.state.showToast('AUTO: DETAILS → ${_label(profile)}');
     }
   }
 
@@ -103,7 +103,7 @@ class QualityGovernor extends Component
   void setProfileManually(QualityProfile profile) {
     autoAdjust = false;
     _applyProfile(profile);
-    game.state.toast.value = 'DETAILS: ${_label(profile)}';
+    game.state.showToast('DETAILS: ${_label(profile)}');
   }
 
   static String _label(QualityProfile p) => switch (p) {

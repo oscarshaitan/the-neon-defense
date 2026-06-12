@@ -106,19 +106,39 @@ void drawTowerShape(
 }
 
 /// Dashed circle helper (canvas has no setLineDash equivalent).
+/// The dash arcs are pre-built into a single origin-centered Path cached by
+/// (radius, dash, gap) — a large range ring (r 800) would otherwise issue
+/// ~500 drawArc calls per frame. Rotation by [phase] replaces per-dash
+/// start-angle offsets.
+final Map<int, Path> _dashedCircleCache = {};
+
 void drawDashedCircle(Canvas canvas, Offset center, double radius,
     Paint paint, double dash, double gap,
     {double phase = 0}) {
-  final circumference = 2 * pi * radius;
-  final count = (circumference / (dash + gap)).floor();
-  if (count <= 0) return;
-  final dashAngle = dash / radius;
-  final stepAngle = circumference / count / radius;
-  for (var i = 0; i < count; i++) {
-    final start = phase + i * stepAngle;
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), start,
-        dashAngle, false, paint);
-  }
+  if (radius <= 0) return;
+  // Quantize radius to keep the cache small for pulsing rings.
+  final quantizedRadius = (radius * 4).round() / 4;
+  final key = Object.hash(quantizedRadius, dash, gap);
+  if (_dashedCircleCache.length > 128) _dashedCircleCache.clear();
+  final path = _dashedCircleCache.putIfAbsent(key, () {
+    final circumference = 2 * pi * quantizedRadius;
+    final count = (circumference / (dash + gap)).floor();
+    final built = Path();
+    if (count <= 0) return built;
+    final dashAngle = dash / quantizedRadius;
+    final stepAngle = circumference / count / quantizedRadius;
+    final rect = Rect.fromCircle(center: Offset.zero, radius: quantizedRadius);
+    for (var i = 0; i < count; i++) {
+      built.addArc(rect, i * stepAngle, dashAngle);
+    }
+    return built;
+  });
+
+  canvas.save();
+  canvas.translate(center.dx, center.dy);
+  if (phase != 0) canvas.rotate(phase);
+  canvas.drawPath(path, paint);
+  canvas.restore();
 }
 
 /// JS Orbitron text labels (mutation tags, etc.).

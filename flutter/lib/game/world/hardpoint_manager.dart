@@ -91,30 +91,6 @@ class HardpointManager extends Component {
     }
   }
 
-  // Find the nearest available hardpoint within snap radius
-  Hardpoint? getNearestSnap(Vector2 worldPos) {
-    Hardpoint? best;
-    double bestDist = kHardpointSnapRadius;
-    for (final hp in hardpoints) {
-      final d = hp.worldPos.distanceTo(worldPos);
-      if (d < bestDist) {
-        bestDist = d;
-        best = hp;
-      }
-    }
-    return best;
-  }
-
-  bool isNearAnyHardpoint(int col, int row, {double radiusCells = 1.5}) {
-    final wx = col * kGridSize + kGridSize / 2;
-    final wy = row * kGridSize + kGridSize / 2;
-    final wPos = Vector2(wx, wy);
-    for (final hp in hardpoints) {
-      if (hp.worldPos.distanceTo(wPos) < radiusCells * kGridSize) return true;
-    }
-    return false;
-  }
-
   @override
   void render(Canvas canvas) {
     for (final hp in hardpoints) {

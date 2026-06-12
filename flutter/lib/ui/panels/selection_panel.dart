@@ -75,13 +75,13 @@ class SelectionPanel extends StatelessWidget {
         _actionBtn(
           'UPGRADE  \$${tower.upgradeCost.toInt()}',
           canUpgrade ? const Color(0xFF00FF41) : const Color(0x44FFFFFF),
-          canUpgrade ? () => _upgrade(tower) : null,
+          canUpgrade ? game.upgradeSelectedTower : null,
         ),
         const SizedBox(height: 6),
         _actionBtn(
           'SELL  \$${tower.sellValue.toInt()}',
           const Color(0xFFFF4444),
-          () => _sell(tower),
+          game.sellSelectedTower,
         ),
         const SizedBox(height: 6),
         _closeBtn(),
@@ -244,20 +244,4 @@ class SelectionPanel extends StatelessWidget {
     );
   }
 
-  void _upgrade(Tower tower) {
-    if (game.state.money.value < tower.upgradeCost) return;
-    game.state.money.value -= tower.upgradeCost;
-    tower.upgrade();
-    game.gameWorld.particles.createParticles(
-        tower.position.x, tower.position.y, const Color(0xFF00FF41), 15);
-    game.saveSystem.save(); // JS saves on upgrade
-  }
-
-  void _sell(Tower tower) {
-    game.state.money.value += tower.sellValue;
-    game.gameWorld.particles.createParticles(
-        tower.position.x, tower.position.y, const Color(0xFFFFFFFF), 10);
-    game.gameWorld.removeTower(tower);
-    game.saveSystem.save(); // JS saves on sell
-  }
 }

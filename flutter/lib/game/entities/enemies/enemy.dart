@@ -8,6 +8,48 @@ import '../../systems/spatial_grid.dart';
 import '../../vfx/render_utils.dart';
 import '../../world/game_world.dart' show RenderLayers;
 
+/// Body paints are shared across all enemies of a color — allocating a
+/// Paint + MaskFilter per enemy per frame costs thousands of allocations
+/// per second and the blur is the most expensive part on CanvasKit.
+final Map<int, Paint> _bodyPaintCache = {};
+final Map<int, Paint> _bodyPaintCacheNoBlur = {};
+final Map<int, Paint> _invisiblePaintCache = {};
+
+Paint _bodyPaintFor(Color color, {required bool blur}) {
+  final cache = blur ? _bodyPaintCache : _bodyPaintCacheNoBlur;
+  return cache.putIfAbsent(color.toARGB32(), () {
+    final paint = Paint()..color = color;
+    if (blur) {
+      paint.maskFilter = const MaskFilter.blur(BlurStyle.solid, 5);
+    }
+    return paint;
+  });
+}
+
+Paint _invisiblePaintFor(Color color) =>
+    _invisiblePaintCache.putIfAbsent(
+        color.toARGB32(), () => Paint()..color = color.withAlpha(51));
+
+final Paint _eliteMarkerPaint = Paint()..color = const Color(0xE0FFFFFF);
+final Paint _hpBarBackPaint = Paint()..color = const Color(0xFFFF0000);
+final Paint _hpBarFrontPaint = Paint()..color = const Color(0xFF00FF00);
+final Paint _frozenRingPaint = Paint()
+  ..color = const Color(0xFF00F3FF)
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 3;
+final Paint _frostFillPaint = Paint()..color = const Color(0x4D00F3FF);
+final Paint _staticRingPaint = Paint()
+  ..color = const Color(0xE57CD7FF)
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 1.5;
+final Paint _stunRingPaint = Paint()
+  ..color = const Color(0xFFE6F8FF)
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 2.5;
+final Paint _stunSpokePaint = Paint()
+  ..color = const Color(0xE5C4ECFF)
+  ..strokeWidth = 1.6;
+
 class Enemy extends PositionComponent
     with HasGameReference<NeonDefenseGame> {
   final EnemyType type;
@@ -180,11 +222,14 @@ class Enemy extends PositionComponent
     final halfW = width / 2;
     final frameCount = game.state.frameCount;
 
-    // Body — JS per-type silhouettes (06_render.js:420-489).
-    final bodyPaint = Paint()
-      ..color = isInvisible ? color.withAlpha(51) : color
-      ..maskFilter =
-          isInvisible ? null : const MaskFilter.blur(BlurStyle.solid, 5);
+    // Body — JS per-type silhouettes (06_render.js:420-489). Paints are
+    // cached per color; the glow blur is dropped on the LOW quality
+    // profile (it is the dominant per-enemy GPU cost on CanvasKit).
+    final lowQuality =
+        game.gameWorld.qualityGovernor.currentProfile == QualityProfile.low;
+    final bodyPaint = isInvisible
+        ? _invisiblePaintFor(color)
+        : _bodyPaintFor(color, blur: !lowQuality);
     switch (type) {
       case EnemyType.tank:
         canvas.drawRect(
@@ -246,31 +291,22 @@ class Enemy extends PositionComponent
           ..lineTo(0, mY + ms)
           ..lineTo(-ms, mY)
           ..close(),
-        Paint()..color = const Color(0xE0FFFFFF),
+        _eliteMarkerPaint,
       );
     }
 
     // HP bar 20x3 at y-15 — only when damaged (JS pass 4).
     if (hp < maxHp) {
-      canvas.drawRect(Rect.fromLTWH(-10, -15, 20, 3),
-          Paint()..color = const Color(0xFFFF0000));
+      canvas.drawRect(Rect.fromLTWH(-10, -15, 20, 3), _hpBarBackPaint);
       canvas.drawRect(
           Rect.fromLTWH(-10, -15, 20 * (hp / maxHp).clamp(0.0, 1.0), 3),
-          Paint()..color = const Color(0xFF00FF00));
+          _hpBarFrontPaint);
     }
 
     // Frozen: cyan ring + 30% frost fill (JS 06_render.js:622-633).
     if (isFrozen) {
-      canvas.drawCircle(
-        Offset.zero,
-        halfW + 2,
-        Paint()
-          ..color = const Color(0xFF00F3FF)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3,
-      );
-      canvas.drawCircle(
-          Offset.zero, halfW, Paint()..color = const Color(0x4D00F3FF));
+      canvas.drawCircle(Offset.zero, halfW + 2, _frozenRingPaint);
+      canvas.drawCircle(Offset.zero, halfW, _frostFillPaint);
     }
 
     // Static charge / stun rings (JS 06_render.js:654-697).
@@ -284,10 +320,7 @@ class Enemy extends PositionComponent
           canvas,
           Offset.zero,
           r * pulse,
-          Paint()
-            ..color = const Color(0xE57CD7FF)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5,
+          _staticRingPaint,
           3,
           5,
           phase: -frameCount * 0.8 / (r * pulse),
@@ -295,18 +328,9 @@ class Enemy extends PositionComponent
       }
 
       if (isStunned) {
-        canvas.drawCircle(
-          Offset.zero,
-          (r + 4) * pulse,
-          Paint()
-            ..color = const Color(0xFFE6F8FF)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.5,
-        );
+        canvas.drawCircle(Offset.zero, (r + 4) * pulse, _stunRingPaint);
         // Electric starburst — 6 rotating spokes.
-        final spokePaint = Paint()
-          ..color = const Color(0xE5C4ECFF)
-          ..strokeWidth = 1.6;
+        final spokePaint = _stunSpokePaint;
         for (var i = 0; i < 6; i++) {
           final a = (pi * 2 * i / 6) + (frameCount * 0.06);
           final outer = r + 9 + (i.isOdd ? 2 : 0);

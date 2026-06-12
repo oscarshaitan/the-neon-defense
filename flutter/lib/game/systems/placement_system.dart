@@ -34,6 +34,22 @@ class PlacementSystem {
         (worldPos.y / kGridSize).floor() * kGridSize + kGridSize / 2,
       );
 
+  /// JS axis-aligned segment box check, shared by placement validation and
+  /// rift tower destruction so the tolerance can never diverge between them.
+  static bool segmentBoxHit(
+      Vector2 point, Vector2 p1, Vector2 p2, double tolerance) {
+    if ((p1.y - p2.y).abs() < 1) {
+      // Horizontal segment
+      return (point.y - p1.y).abs() < tolerance &&
+          point.x >= (p1.x < p2.x ? p1.x : p2.x) - tolerance &&
+          point.x <= (p1.x > p2.x ? p1.x : p2.x) + tolerance;
+    }
+    // Vertical segment
+    return (point.x - p1.x).abs() < tolerance &&
+        point.y >= (p1.y < p2.y ? p1.y : p2.y) - tolerance &&
+        point.y <= (p1.y > p2.y ? p1.y : p2.y) + tolerance;
+  }
+
   /// Hardpoint within the JS slot snap radius (GRID_SIZE * 0.45) of the
   /// snapped position.
   Hardpoint? hardpointAt(Vector2 snap) {
@@ -80,23 +96,7 @@ class PlacementSystem {
     for (final rift in game.gameWorld.waveSystem.rifts) {
       final pts = rift.points;
       for (var i = 0; i < pts.length - 1; i++) {
-        final p1 = pts[i];
-        final p2 = pts[i + 1];
-        if ((p1.y - p2.y).abs() < 1) {
-          // Horizontal segment
-          if ((snap.y - p1.y).abs() < tolerance &&
-              snap.x >= (p1.x < p2.x ? p1.x : p2.x) - tolerance &&
-              snap.x <= (p1.x > p2.x ? p1.x : p2.x) + tolerance) {
-            return true;
-          }
-        } else {
-          // Vertical segment
-          if ((snap.x - p1.x).abs() < tolerance &&
-              snap.y >= (p1.y < p2.y ? p1.y : p2.y) - tolerance &&
-              snap.y <= (p1.y > p2.y ? p1.y : p2.y) + tolerance) {
-            return true;
-          }
-        }
+        if (segmentBoxHit(snap, pts[i], pts[i + 1], tolerance)) return true;
       }
     }
     return false;

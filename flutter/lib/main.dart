@@ -99,7 +99,8 @@ class _GamePageState extends State<_GamePage> {
 /// refreshed by a single low-rate timer (~6 frames, matching the JS
 /// UI_SYNC_INTERVAL_FRAMES) instead of a per-frame setState ticker.
 /// Transient toast for quality-governor notifications
-/// (JS showQualityToast). Auto-hides after ~2.4 s.
+/// (JS showQualityToast). Hiding is managed by GameState.showToast so
+/// widget rebuilds can't re-arm the timer.
 class _QualityToast extends StatelessWidget {
   final NeonDefenseGame game;
   const _QualityToast({required this.game});
@@ -110,11 +111,6 @@ class _QualityToast extends StatelessWidget {
       valueListenable: game.state.toast,
       builder: (_, message, child) {
         if (message == null) return const SizedBox.shrink();
-        Future.delayed(const Duration(milliseconds: 2400), () {
-          if (game.state.toast.value == message) {
-            game.state.toast.value = null;
-          }
-        });
         return SafeArea(
           child: Align(
             alignment: Alignment.topCenter,
@@ -223,8 +219,12 @@ class _HudLayerState extends State<_HudLayer> {
         WaveIntelPanel(game: game),
         _QualityToast(game: game),
         _HintBanner(game: game),
+        // The panel shows money/lives-dependent costs and affordances, so it
+        // listens to those notifiers directly rather than relying on the
+        // low-rate HUD timer.
         ListenableBuilder(
-          listenable: game.selection,
+          listenable: Listenable.merge(
+              [game.selection, game.state.money, game.state.lives]),
           builder: (_, child) => SelectionPanel(game: game),
         ),
         TutorialOverlay(game: game),

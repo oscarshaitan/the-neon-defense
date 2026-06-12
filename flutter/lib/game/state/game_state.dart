@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../config/constants.dart';
@@ -29,8 +31,19 @@ class GameState {
   /// keep the larger amount; decays x0.9 per render frame.
   double shakeAmount = 0;
 
-  /// Transient HUD toast (quality governor notifications).
+  /// Transient HUD toast (quality governor notifications). Auto-hides via
+  /// [showToast]; the timer lives here so widget rebuilds can't re-arm or
+  /// prematurely clear it.
   final ValueNotifier<String?> toast = ValueNotifier(null);
+  Timer? _toastTimer;
+
+  void showToast(String message) {
+    toast.value = message;
+    _toastTimer?.cancel();
+    _toastTimer = Timer(const Duration(milliseconds: 2400), () {
+      toast.value = null;
+    });
+  }
 
   /// Wave Intelligence panel visibility (JS toggleWavePanel).
   final ValueNotifier<bool> waveIntelOpen = ValueNotifier(false);

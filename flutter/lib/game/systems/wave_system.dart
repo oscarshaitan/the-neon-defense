@@ -16,8 +16,6 @@ class WaveSystem extends Component with HasGameReference {
   double prepTimer = 0;
   bool isPrepPhase = false;
   int spawnTimer = 0;
-  int totalEnemies = 0;
-  int enemiesSpawned = 0;
 
   /// Actual composition of the running wave (JS currentWaveDistribution).
   Map<EnemyType, int>? currentWaveDistribution;
@@ -46,7 +44,7 @@ class WaveSystem extends Component with HasGameReference {
     isPrepPhase = false;
     prepTimer = 0;
     spawnTimer = 0;
-    enemiesSpawned = 0;
+    currentWaveDistribution = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -90,7 +88,6 @@ class WaveSystem extends Component with HasGameReference {
     g.state.isWaveActive.value = true;
     spawnQueue.clear();
     spawnTimer = 0;
-    enemiesSpawned = 0;
 
     final wave = g.state.wave.value;
 
@@ -168,7 +165,6 @@ class WaveSystem extends Component with HasGameReference {
       }
     }
 
-    totalEnemies = spawnQueue.length;
     currentWaveDistribution = <EnemyType, int>{};
     for (final t in spawnQueue) {
       currentWaveDistribution![t] = (currentWaveDistribution![t] ?? 0) + 1;
@@ -242,7 +238,6 @@ class WaveSystem extends Component with HasGameReference {
           radius: 150,
           color: const Color(0xFFFF8800));
     }
-    enemiesSpawned++;
   }
 
   bool _noEnemiesAlive() {

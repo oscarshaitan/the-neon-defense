@@ -7,7 +7,7 @@ import '../world/game_world.dart';
 
 enum AbilityType { emp, overclock }
 
-enum AbilityState { ready, targeting, active, cooldown }
+enum AbilityState { ready, targeting, cooldown }
 
 class AbilitySystem extends Component {
   final GameWorld gameWorld;
@@ -69,7 +69,6 @@ class AbilitySystem extends Component {
   void _fireEmp(Vector2 worldPos) {
     final g = gameWorld.game;
     g.state.energy.value -= kEmpCost;
-    empState = AbilityState.active;
 
     // Freeze all enemies in radius
     for (final enemy in g.entities.enemies) {

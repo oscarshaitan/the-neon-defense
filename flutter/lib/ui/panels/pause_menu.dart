@@ -42,7 +42,7 @@ class _PauseMenuState extends State<PauseMenu> {
               const SizedBox(height: 10),
               _menuBtn('SAVE', const Color(0xFF00FF41), () {
                 game.saveSystem.save();
-                game.state.toast.value = 'GAME SAVED';
+                game.state.showToast('GAME SAVED');
               }),
               const SizedBox(height: 10),
               _menuBtn('RESET', const Color(0xFFFF00AC), () {
@@ -153,7 +153,7 @@ class _PauseMenuState extends State<PauseMenu> {
               selected: governor.autoAdjust,
               onTap: () => setState(() {
                 governor.autoAdjust = true;
-                game.state.toast.value = 'DETAILS: AUTO';
+                game.state.showToast('DETAILS: AUTO');
               }),
             ),
           ],
