@@ -39,14 +39,16 @@ jobs:
       #   /                        → landing page
       #   /js/                     → JS game
       #   /flutter/build/web/      → Flutter web build (relative base-href)
+      #   /godot/build/web/        → Godot web export (committed, no-threads)
       - name: Assemble site
         run: |
-          mkdir -p _site/js _site/flutter/build/web _site/assets
+          mkdir -p _site/js _site/flutter/build/web _site/godot/build/web _site/assets
           cp index.html _site/
           cp README.md  _site/
           cp -r assets/. _site/assets/
           cp -r js/. _site/js/
           cp -r flutter/build/web/. _site/flutter/build/web/
+          cp -r godot/build/web/. _site/godot/build/web/
 
       # ── Upload artifact for GitHub Pages ───────────────────────────────────
       - uses: actions/configure-pages@v4

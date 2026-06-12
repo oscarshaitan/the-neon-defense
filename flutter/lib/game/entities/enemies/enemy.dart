@@ -1,10 +1,88 @@
+import 'dart:math';
 import 'dart:ui';
 import 'package:flame/components.dart';
 
 import '../../config/constants.dart';
+import '../../neon_defense_game.dart';
 import '../../systems/spatial_grid.dart';
+import '../../vfx/render_utils.dart';
+import '../../world/game_world.dart' show RenderLayers;
 
-class Enemy extends PositionComponent {
+/// Body paints are shared across all enemies of a color — allocating a
+/// Paint + MaskFilter per enemy per frame costs thousands of allocations
+/// per second and the blur is the most expensive part on CanvasKit.
+final Map<int, Paint> _bodyPaintCache = {};
+final Map<int, Paint> _bodyPaintCacheNoBlur = {};
+final Map<int, Paint> _invisiblePaintCache = {};
+
+Paint _bodyPaintFor(Color color, {required bool blur}) {
+  final cache = blur ? _bodyPaintCache : _bodyPaintCacheNoBlur;
+  return cache.putIfAbsent(color.toARGB32(), () {
+    final paint = Paint()..color = color;
+    if (blur) {
+      paint.maskFilter = const MaskFilter.blur(BlurStyle.solid, 5);
+    }
+    return paint;
+  });
+}
+
+Paint _invisiblePaintFor(Color color) =>
+    _invisiblePaintCache.putIfAbsent(
+        color.toARGB32(), () => Paint()..color = color.withAlpha(51));
+
+final Paint _eliteMarkerPaint = Paint()..color = const Color(0xE0FFFFFF);
+final Paint _hpBarBackPaint = Paint()..color = const Color(0xFFFF0000);
+final Paint _hpBarFrontPaint = Paint()..color = const Color(0xFF00FF00);
+final Paint _frozenRingPaint = Paint()
+  ..color = const Color(0xFF00F3FF)
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 3;
+final Paint _frostFillPaint = Paint()..color = const Color(0x4D00F3FF);
+final Paint _staticRingPaint = Paint()
+  ..color = const Color(0xE57CD7FF)
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 1.5;
+final Paint _stunRingPaint = Paint()
+  ..color = const Color(0xFFE6F8FF)
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 2.5;
+final Paint _stunSpokePaint = Paint()
+  ..color = const Color(0xE5C4ECFF)
+  ..strokeWidth = 1.6;
+
+// Static body silhouettes (origin-centered) — geometry never changes, so
+// building a Path per enemy per frame is pure allocation waste.
+final Path _fastKitePath = Path()
+  ..moveTo(0, -12)
+  ..lineTo(6, 0)
+  ..lineTo(0, 8)
+  ..lineTo(-6, 0)
+  ..close();
+final Path _splitterTrianglePath = Path()
+  ..moveTo(0, -14)
+  ..lineTo(12, 10)
+  ..lineTo(-12, 10)
+  ..close();
+final Map<int, Path> _hexPathCache = {};
+
+Path _hexPathFor(double radius) =>
+    _hexPathCache.putIfAbsent((radius * 4).round(), () {
+      final path = Path();
+      for (var i = 0; i < 6; i++) {
+        final a = pi * 2 * i / 6;
+        final px = radius * cos(a);
+        final py = radius * sin(a);
+        if (i == 0) {
+          path.moveTo(px, py);
+        } else {
+          path.lineTo(px, py);
+        }
+      }
+      return path..close();
+    });
+
+class Enemy extends PositionComponent
+    with HasGameReference<NeonDefenseGame> {
   final EnemyType type;
   double hp;
   final double maxHp;
@@ -15,6 +93,8 @@ class Enemy extends PositionComponent {
   final double width;
   final List<Vector2> path;
   final int riftLevel;
+  final bool isMutant;
+  final String? mutationKey;
   final SpatialGrid spatialGrid;
 
   int pathIndex = 0;
@@ -26,7 +106,6 @@ class Enemy extends PositionComponent {
   double staticCharges = 0;
   int staticStunTimer = 0;
   bool isInvisible = false;
-  double _visibilityTimer = 0; // shifter cycle timer (seconds)
 
   Enemy({
     required this.type,
@@ -38,20 +117,32 @@ class Enemy extends PositionComponent {
     required this.path,
     required this.riftLevel,
     required this.spatialGrid,
+    this.isMutant = false,
+    this.mutationKey,
+    Vector2? spawnPos,
+    int? startPathIndex,
   })  : maxHp = hp,
-        super(size: Vector2.all(width), anchor: Anchor.center) {
-    position = path.isNotEmpty ? path[0].clone() : Vector2.zero();
+        super(
+          size: Vector2.all(width),
+          anchor: Anchor.center,
+          priority: RenderLayers.enemies,
+        ) {
+    position = spawnPos?.clone() ??
+        (path.isNotEmpty ? path[0].clone() : Vector2.zero());
+    pathIndex = startPathIndex ?? 0;
   }
 
   @override
   void onMount() {
     super.onMount();
     spatialGrid.insert(this);
+    game.entities.enemies.add(this);
   }
 
   @override
   void onRemove() {
     spatialGrid.remove(this);
+    game.entities.enemies.remove(this);
     super.onRemove();
   }
 
@@ -59,9 +150,25 @@ class Enemy extends PositionComponent {
   void update(double dt) {
     if (isDead || reachedCore) return;
 
-    // Status: frozen / stun
-    if (frozenTimer > 0) { frozenTimer--; return; }
-    if (staticStunTimer > 0) { staticStunTimer--; return; }
+    // Status: frozen / stun (JS: frozen enemies still tick down stun)
+    if (frozenTimer > 0) {
+      if (staticStunTimer > 0) staticStunTimer--;
+      frozenTimer--;
+      // JS frozen trail (05_loop.js:1103): cyan particle every 16 frames.
+      if (game.state.frameCount % 16 == 0) {
+        game.gameWorld.particles
+            .createParticles(position.x, position.y, const Color(0xFF00F3FF), 1, priority: 0);
+      }
+      return;
+    }
+    if (staticStunTimer > 0) {
+      staticStunTimer--;
+      if (game.state.frameCount % 16 == 0) {
+        game.gameWorld.particles
+            .createParticles(position.x, position.y, const Color(0xFF7CD7FF), 1, priority: 0);
+      }
+      return;
+    }
 
     if (pathIndex >= path.length) {
       _reachCore();
@@ -84,14 +191,14 @@ class Enemy extends PositionComponent {
       spatialGrid.update(this, oldPos);
     }
 
-    // Shifter: toggle invisibility every 3s (JS: frameCount % 360 > 180 at 60fps)
+    // Shifter phase cycle — JS: isInvisible = (frameCount % 360) > 180
     if (type == EnemyType.shifter) {
-      _visibilityTimer += dt;
-      isInvisible = (_visibilityTimer % 6.0) > 3.0;
+      isInvisible = (game.state.frameCount % 360) > 180;
     }
   }
 
   void takeDamage(double dmg) {
+    if (isFrozen) dmg *= 1.2; // JS hitEnemy: frozen enemies take +20%
     hp -= dmg;
     if (hp <= 0) _die();
   }
@@ -110,19 +217,30 @@ class Enemy extends PositionComponent {
 
   void _die() {
     isDead = true;
-    final game = findGame()! as dynamic;
-    // Award credits + energy (JS: money += reward; energy = Math.min(maxEnergy, energy + 1))
-    game.money += reward;
-    game.energy = (game.energy + 1.0).clamp(0.0, kMaxEnergy);
+    // JS: money += reward; energy = Math.min(maxEnergy, energy + 1)
+    game.state.money.value += reward;
+    game.state.addEnergy(1.0);
+    game.state.recordKill(type);
+    // JS hitEnemy kill effects: 4 particles (priority 2) + light r60.
+    game.gameWorld.particles
+        .createParticles(position.x, position.y, color, 4, priority: 2);
+    game.gameWorld.lights
+        .emit(x: position.x, y: position.y, radius: 60, color: color);
+    if (type == EnemyType.splitter) {
+      game.gameWorld.spawnMinis(this);
+    }
+    game.audio.playExplosion();
+    game.saveSystem.queueAutoSave(); // JS batches combat saves
     removeFromParent();
   }
 
   void _reachCore() {
     reachedCore = true;
-    final game = findGame()!;
-    (game as dynamic).lives -= 1;
-    if ((game as dynamic).lives <= 0) {
-      (game as dynamic).gameOver();
+    game.state.lives.value -= 1;
+    game.state.startShake(20); // JS startShake(20) on core breach
+    game.audio.playHit();
+    if (game.state.lives.value <= 0) {
+      game.gameOver();
     }
     removeFromParent();
   }
@@ -132,34 +250,101 @@ class Enemy extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
-    if (isInvisible) return;
-
     final halfW = width / 2;
-    final color = isFrozen
-        ? const Color(0xFF88EEFF)
-        : isStunned
-            ? const Color(0xFFFFFF88)
-            : this.color;
+    final frameCount = game.state.frameCount;
 
-    // Body
-    canvas.drawCircle(
-      Offset.zero,
-      halfW,
-      Paint()..color = color.withAlpha(200),
-    );
+    // Body — JS per-type silhouettes (06_render.js:420-489). Paints are
+    // cached per color; the glow blur is dropped on the LOW quality
+    // profile (it is the dominant per-enemy GPU cost on CanvasKit).
+    final lowQuality =
+        game.gameWorld.qualityGovernor.currentProfile == QualityProfile.low;
+    final bodyPaint = isInvisible
+        ? _invisiblePaintFor(color)
+        : _bodyPaintFor(color, blur: !lowQuality);
+    switch (type) {
+      case EnemyType.tank:
+        canvas.drawRect(
+            Rect.fromLTWH(-10, -10, 20, 20), bodyPaint);
+        break;
+      case EnemyType.fast:
+        canvas.drawPath(_fastKitePath, bodyPaint);
+        break;
+      case EnemyType.boss:
+        canvas.drawPath(_hexPathFor(halfW), bodyPaint);
+        break;
+      case EnemyType.splitter:
+        canvas.drawPath(_splitterTrianglePath, bodyPaint);
+        break;
+      case EnemyType.mini:
+        canvas.drawCircle(Offset.zero, 6, bodyPaint);
+        break;
+      default:
+        canvas.drawCircle(Offset.zero, halfW, bodyPaint);
+    }
 
-    // HP bar (above enemy)
-    final barW = width * 1.2;
-    final barH = 3.0;
-    final barX = -barW / 2;
-    final barY = -halfW - 6;
-    canvas.drawRect(
-      Rect.fromLTWH(barX, barY, barW, barH),
-      Paint()..color = const Color(0x66000000),
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(barX, barY, barW * (hp / maxHp), barH),
-      Paint()..color = const Color(0xFF00FF41),
-    );
+    if (isInvisible) return; // JS draws nothing else for phased shifters
+
+    // Elite marker — white diamond above (riftLevel > 1).
+    if (riftLevel > 1) {
+      final mY = -halfW - 8;
+      final ms = min(6, 4 + (riftLevel - 1) ~/ 2).toDouble();
+      canvas.drawPath(
+        Path()
+          ..moveTo(0, mY - ms)
+          ..lineTo(ms, mY)
+          ..lineTo(0, mY + ms)
+          ..lineTo(-ms, mY)
+          ..close(),
+        _eliteMarkerPaint,
+      );
+    }
+
+    // HP bar 20x3 at y-15 — only when damaged (JS pass 4).
+    if (hp < maxHp) {
+      canvas.drawRect(Rect.fromLTWH(-10, -15, 20, 3), _hpBarBackPaint);
+      canvas.drawRect(
+          Rect.fromLTWH(-10, -15, 20 * (hp / maxHp).clamp(0.0, 1.0), 3),
+          _hpBarFrontPaint);
+    }
+
+    // Frozen: cyan ring + 30% frost fill (JS 06_render.js:622-633).
+    if (isFrozen) {
+      canvas.drawCircle(Offset.zero, halfW + 2, _frozenRingPaint);
+      canvas.drawCircle(Offset.zero, halfW, _frostFillPaint);
+    }
+
+    // Static charge / stun rings (JS 06_render.js:654-697).
+    final hasStatic = staticCharges > 0;
+    if (hasStatic || isStunned) {
+      final r = halfW + 8;
+      final pulse = 1 + sin(frameCount * 0.35 + position.x * 0.01) * 0.12;
+
+      if (hasStatic) {
+        drawDashedCircle(
+          canvas,
+          Offset.zero,
+          r * pulse,
+          _staticRingPaint,
+          3,
+          5,
+          phase: -frameCount * 0.8 / (r * pulse),
+        );
+      }
+
+      if (isStunned) {
+        canvas.drawCircle(Offset.zero, (r + 4) * pulse, _stunRingPaint);
+        // Electric starburst — 6 rotating spokes.
+        final spokePaint = _stunSpokePaint;
+        for (var i = 0; i < 6; i++) {
+          final a = (pi * 2 * i / 6) + (frameCount * 0.06);
+          final outer = r + 9 + (i.isOdd ? 2 : 0);
+          canvas.drawLine(
+            Offset(cos(a) * (r + 1), sin(a) * (r + 1)),
+            Offset(cos(a) * outer, sin(a) * outer),
+            spokePaint,
+          );
+        }
+      }
+    }
   }
 }

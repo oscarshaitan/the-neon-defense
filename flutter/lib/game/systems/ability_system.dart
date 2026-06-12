@@ -2,13 +2,12 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 
 import '../config/constants.dart';
-import '../entities/enemies/enemy.dart';
 import '../entities/towers/tower.dart';
 import '../world/game_world.dart';
 
 enum AbilityType { emp, overclock }
 
-enum AbilityState { ready, targeting, active, cooldown }
+enum AbilityState { ready, targeting, cooldown }
 
 class AbilitySystem extends Component {
   final GameWorld gameWorld;
@@ -37,13 +36,13 @@ class AbilitySystem extends Component {
   bool get isTargeting => targetingAbility != null;
 
   void startTargeting(AbilityType type) {
-    final g = gameWorld.game;
+    final energy = gameWorld.game.state.energy.value;
     if (type == AbilityType.emp) {
       if (empState != AbilityState.ready) return;
-      if (g.energy < kEmpCost) return;
+      if (energy < kEmpCost) return;
     } else {
       if (overclockState != AbilityState.ready) return;
-      if (g.energy < kOverclockCost) return;
+      if (energy < kOverclockCost) return;
     }
     targetingAbility = type;
   }
@@ -69,15 +68,20 @@ class AbilitySystem extends Component {
 
   void _fireEmp(Vector2 worldPos) {
     final g = gameWorld.game;
-    g.energy -= kEmpCost;
-    empState = AbilityState.active;
+    g.state.energy.value -= kEmpCost;
 
     // Freeze all enemies in radius
-    for (final enemy in gameWorld.children.whereType<Enemy>()) {
+    for (final enemy in g.entities.enemies) {
       if (enemy.position.distanceTo(worldPos) <= kEmpRadius) {
         enemy.freeze(kEmpDurationFrames);
       }
     }
+
+    // JS EMP effects: cyan burst + big light flash.
+    gameWorld.particles
+        .createParticles(worldPos.x, worldPos.y, const Color(0xFF00F3FF), 20);
+    gameWorld.lights.emit(
+        x: worldPos.x, y: worldPos.y, radius: 250, color: const Color(0xFF00F3FF));
 
     empCooldownTimer = kEmpMaxCooldown;
     empState = AbilityState.cooldown;
@@ -89,7 +93,7 @@ class AbilitySystem extends Component {
     // Find nearest tower to tap position
     Tower? nearest;
     double nearestDist = 80.0; // max snap distance
-    for (final tower in gameWorld.children.whereType<Tower>()) {
+    for (final tower in g.entities.towers) {
       final d = tower.position.distanceTo(worldPos);
       if (d < nearestDist) {
         nearestDist = d;
@@ -101,9 +105,11 @@ class AbilitySystem extends Component {
       return;
     }
 
-    g.energy -= kOverclockCost;
+    g.state.energy.value -= kOverclockCost;
     nearest.overclocked = true;
     nearest.overclockTimer = kOverclockDurationFrames;
+    gameWorld.particles.createParticles(
+        nearest.position.x, nearest.position.y, const Color(0xFFFCEE0A), 15);
 
     overclockCooldownTimer = kOverclockMaxCooldown;
     overclockState = AbilityState.cooldown;
@@ -115,10 +121,13 @@ class AbilitySystem extends Component {
 
   @override
   void update(double dt) {
-    final g = gameWorld.game;
-    if (g.gameState != 'playing' || g.isPaused) return;
-
+    // Pause/phase gating is centralized in GameWorld.updateTree.
     // Energy: JS gives +1 per kill only (no passive regen). See enemy.dart _die().
+
+    // JS maybeShowAbilityHint: surface the hint once an ability is usable.
+    if (empReady || overclockReady) {
+      gameWorld.game.hints.maybeShowAbilityHint();
+    }
 
     // Cooldown tick (decrements every 60 frames)
     _cooldownTick++;
@@ -219,9 +228,10 @@ class AbilitySystem extends Component {
           : 0.0;
 
   bool get empReady =>
-      empState == AbilityState.ready && gameWorld.game.energy >= kEmpCost;
+      empState == AbilityState.ready &&
+      gameWorld.game.state.energy.value >= kEmpCost;
 
   bool get overclockReady =>
       overclockState == AbilityState.ready &&
-      gameWorld.game.energy >= kOverclockCost;
+      gameWorld.game.state.energy.value >= kOverclockCost;
 }

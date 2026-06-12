@@ -165,10 +165,14 @@ const int kArcStunFrames = 30;
 const int kArcMinLinkSpacingCells = 1;
 const int kArcMaxLinkSpacingCells = 3;
 
+// JS: MAX_TOWER_RANGE = 800 (00_core.js:54)
+const double kMaxTowerRange = 800.0;
+
 // ---------------------------------------------------------------------------
 // Hardpoint rules
 // ---------------------------------------------------------------------------
-const double kHardpointSnapRadius = 40.0;
+// JS: HARDPOINT_RULES.slotSnapRadius = GRID_SIZE * 0.45 (00_core.js:25)
+const double kHardpointSnapRadius = kGridSize * 0.45;
 
 // Core ring
 const int kCoreHardpointCount = 6;
@@ -195,7 +199,6 @@ const double kStartingMoney = 100.0;
 const int kStartingLives = 20;
 const double kStartingEnergy = 0.0;
 const double kMaxEnergy = 100.0;
-const double kEnergyRegenPerFrame = 0.05;
 
 // ---------------------------------------------------------------------------
 // Abilities

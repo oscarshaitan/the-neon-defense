@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart';
 
 import 'game/neon_defense_game.dart';
@@ -9,8 +10,10 @@ import 'ui/screens/game_over_screen.dart';
 import 'ui/hud/stats_bar.dart';
 import 'ui/hud/tower_bar.dart';
 import 'ui/hud/abilities_bar.dart';
+import 'ui/overlays/tutorial_overlay.dart';
 import 'ui/panels/selection_panel.dart';
 import 'ui/panels/pause_menu.dart';
+import 'ui/panels/wave_intel_panel.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +27,15 @@ void main() {
 
 class NeonDefenseApp extends StatelessWidget {
   const NeonDefenseApp({super.key});
+
+  /// Overlay builders shared by the app and the UI render tests.
+  static Map<String, Widget Function(BuildContext, NeonDefenseGame)>
+      overlayBuilders() => {
+            'startScreen': (_, game) => StartScreen(game: game),
+            'gameOverScreen': (_, game) => GameOverScreen(game: game),
+            'hud': (_, game) => _HudLayer(game: game),
+            'pauseMenu': (_, game) => PauseMenu(game: game),
+          };
 
   @override
   Widget build(BuildContext context) {
@@ -61,22 +73,13 @@ class _GamePageState extends State<_GamePage> {
 
   void _onKey(KeyEvent event) {
     if (event is KeyDownEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.keyP ||
-          event.logicalKey == LogicalKeyboardKey.escape) {
-        _togglePause();
+      if (event.logicalKey == LogicalKeyboardKey.keyP) {
+        _game.togglePause();
+      } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+        _game.handleEscape(); // two-stage: deselect, then pause
       } else {
         _game.handleKeyDown(event.logicalKey);
       }
-    }
-  }
-
-  void _togglePause() {
-    if (_game.gameState != 'playing') return;
-    _game.isPaused = !_game.isPaused;
-    if (_game.isPaused) {
-      _game.overlays.add('pauseMenu');
-    } else {
-      _game.overlays.remove('pauseMenu');
     }
   }
 
@@ -88,14 +91,97 @@ class _GamePageState extends State<_GamePage> {
       onKeyEvent: _onKey,
       child: GameWidget<NeonDefenseGame>(
         game: _game,
-        overlayBuilderMap: {
-          'startScreen': (_, game) => StartScreen(game: game),
-          'gameOverScreen': (_, game) => GameOverScreen(game: game),
-          'hud': (_, game) => _HudLayer(game: game),
-          'pauseMenu': (_, game) => PauseMenu(game: game),
-        },
+        overlayBuilderMap: NeonDefenseApp.overlayBuilders(),
         initialActiveOverlays: const ['startScreen'],
       ),
+    );
+  }
+}
+
+/// HUD container. Stat widgets subscribe to GameState notifiers; data that
+/// has no notifier (prep countdown, enemy count, ability cooldowns) is
+/// refreshed by a single low-rate timer (~6 frames, matching the JS
+/// UI_SYNC_INTERVAL_FRAMES) instead of a per-frame setState ticker.
+/// Transient toast for quality-governor notifications
+/// (JS showQualityToast). Hiding is managed by GameState.showToast so
+/// widget rebuilds can't re-arm the timer.
+class _QualityToast extends StatelessWidget {
+  final NeonDefenseGame game;
+  const _QualityToast({required this.game});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: game.state.toast,
+      builder: (_, message, child) {
+        if (message == null) return const SizedBox.shrink();
+        return SafeArea(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Container(
+              margin: const EdgeInsets.only(top: 64),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xE6050510),
+                border:
+                    Border.all(color: const Color(0xFFFCEE0A), width: 1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontFamily: 'Orbitron',
+                  fontSize: 10,
+                  color: Color(0xFFFCEE0A),
+                  letterSpacing: 2,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Single-line onboarding hint (JS inline-hint): 3.6 s display.
+class _HintBanner extends StatelessWidget {
+  final NeonDefenseGame game;
+  const _HintBanner({required this.game});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: game.hints,
+      builder: (_, child) {
+        final hint = game.hints.activeHint;
+        if (hint == null) return const SizedBox.shrink();
+        return SafeArea(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 116),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xE6050510),
+                border: Border.all(color: const Color(0x8800F3FF), width: 1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                hint,
+                style: const TextStyle(
+                  fontFamily: 'Orbitron',
+                  fontSize: 9,
+                  color: Color(0xCCE6FCFF),
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -108,20 +194,21 @@ class _HudLayer extends StatefulWidget {
   State<_HudLayer> createState() => _HudLayerState();
 }
 
-class _HudLayerState extends State<_HudLayer>
-    with SingleTickerProviderStateMixin {
-  late final Ticker _ticker;
+class _HudLayerState extends State<_HudLayer> {
+  Timer? _uiSync;
 
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker((_) => setState(() {}));
-    _ticker.start();
+    _uiSync = Timer.periodic(
+      const Duration(milliseconds: 100),
+      (_) => setState(() {}),
+    );
   }
 
   @override
   void dispose() {
-    _ticker.dispose();
+    _uiSync?.cancel();
     super.dispose();
   }
 
@@ -133,7 +220,18 @@ class _HudLayerState extends State<_HudLayer>
         StatsBar(game: game),
         TowerBar(game: game),
         AbilitiesBar(game: game),
-        SelectionPanel(game: game, selectedTower: game.selectedTower),
+        WaveIntelPanel(game: game),
+        _QualityToast(game: game),
+        _HintBanner(game: game),
+        // The panel shows money/lives-dependent costs and affordances, so it
+        // listens to those notifiers directly rather than relying on the
+        // low-rate HUD timer.
+        ListenableBuilder(
+          listenable: Listenable.merge(
+              [game.selection, game.state.money, game.state.lives]),
+          builder: (_, child) => SelectionPanel(game: game),
+        ),
+        TutorialOverlay(game: game),
         // Recenter button — bottom-right circle, matches JS #recenter-btn
         SafeArea(
           child: Align(

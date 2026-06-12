@@ -62,8 +62,8 @@ class _TowerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final def = kTowers[type]!;
-    final isSelected = game.gameWorld.selectedTowerType == type;
-    final canAfford = game.money >= def.cost;
+    final isSelected = game.selection.selectedTowerType == type;
+    final canAfford = game.state.money.value >= def.cost;
 
     // JS: selected border = green (#00ff41), not tower color
     final borderColor = isSelected
@@ -73,7 +73,7 @@ class _TowerButton extends StatelessWidget {
             : const Color(0x33FFFFFF);
 
     return GestureDetector(
-      onTap: canAfford ? () => game.gameWorld.selectTowerType(type) : null,
+      onTap: canAfford ? () => game.chooseTowerType(type) : null,
       child: Container(
         width: 60,
         height: 80,

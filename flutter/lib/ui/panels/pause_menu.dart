@@ -1,16 +1,28 @@
 import 'package:flutter/material.dart';
+import '../../game/config/constants.dart';
 import '../../game/neon_defense_game.dart';
 
-class PauseMenu extends StatelessWidget {
+class PauseMenu extends StatefulWidget {
   final NeonDefenseGame game;
   const PauseMenu({super.key, required this.game});
+
+  @override
+  State<PauseMenu> createState() => _PauseMenuState();
+}
+
+class _PauseMenuState extends State<PauseMenu> {
+  NeonDefenseGame get game => widget.game;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xCC050510),
       body: Center(
-        child: Container(
+        // Scrollable so the full menu stays reachable on short landscape
+        // phone viewports.
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: const Color(0xFF050510),
@@ -30,16 +42,150 @@ class PauseMenu extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              _menuBtn('RESUME', const Color(0xFF00F3FF), () {
-                game.isPaused = false;
-                game.overlays.remove('pauseMenu');
+              _menuBtn('RESUME', const Color(0xFF00F3FF), game.togglePause),
+              const SizedBox(height: 10),
+              _menuBtn('SAVE', const Color(0xFF00FF41), () {
+                game.saveSystem.save();
+                game.state.showToast('GAME SAVED');
               }),
               const SizedBox(height: 10),
               _menuBtn('RESET', const Color(0xFFFF00AC), () {
                 game.overlays.remove('pauseMenu');
                 game.resetGame();
               }),
+              const SizedBox(height: 18),
+              _soundRow(),
+              const SizedBox(height: 12),
+              _qualityRow(),
             ],
+          ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _soundRow() {
+    final audio = game.audio;
+    return Column(
+      children: [
+        _chipBtn(
+          'SOUND: ${audio.muted ? 'OFF' : 'ON'}',
+          selected: !audio.muted,
+          onTap: () => setState(() => audio.toggleMute()),
+        ),
+        const SizedBox(height: 6),
+        _volumeSlider('MUSIC', audio.musicVolume,
+            (v) => setState(() => audio.setMusicVolume(v))),
+        _volumeSlider('SFX', audio.sfxVolume,
+            (v) => setState(() => audio.setSfxVolume(v))),
+      ],
+    );
+  }
+
+  Widget _volumeSlider(
+      String label, double value, ValueChanged<double> onChanged) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 44,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Orbitron',
+              fontSize: 8,
+              color: Color(0x8800F3FF),
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 140,
+          height: 28,
+          child: SliderTheme(
+            data: SliderThemeData(
+              activeTrackColor: const Color(0xFF00F3FF),
+              inactiveTrackColor: const Color(0x3300F3FF),
+              thumbColor: const Color(0xFF00F3FF),
+              overlayShape: SliderComponentShape.noOverlay,
+              trackHeight: 2,
+              thumbShape:
+                  const RoundSliderThumbShape(enabledThumbRadius: 6),
+            ),
+            child: Slider(value: value, onChanged: onChanged),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _qualityRow() {
+    final governor = game.gameWorld.qualityGovernor;
+    return Column(
+      children: [
+        const Text(
+          'DETAILS',
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 9,
+            color: Color(0x8800F3FF),
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final entry in const [
+              (QualityProfile.high, 'HIGH'),
+              (QualityProfile.balanced, 'MED'),
+              (QualityProfile.low, 'LOW'),
+            ])
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: _chipBtn(
+                  entry.$2,
+                  selected: !governor.autoAdjust &&
+                      governor.currentProfile == entry.$1,
+                  onTap: () =>
+                      setState(() => governor.setProfileManually(entry.$1)),
+                ),
+              ),
+            const SizedBox(width: 6),
+            _chipBtn(
+              'AUTO',
+              selected: governor.autoAdjust,
+              onTap: () => setState(() {
+                governor.autoAdjust = true;
+                game.state.showToast('DETAILS: AUTO');
+              }),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _chipBtn(String label,
+      {required bool selected, required VoidCallback onTap}) {
+    final color =
+        selected ? const Color(0xFF00FF41) : const Color(0x8800F3FF);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          border: Border.all(color: color, width: 1),
+          color: selected ? const Color(0x1A00FF41) : Colors.transparent,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 9,
+            color: color,
+            letterSpacing: 1,
           ),
         ),
       ),

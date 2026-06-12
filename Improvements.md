@@ -69,6 +69,13 @@ Scales:
 - [x] C4-18 Deferred save — `requestIdleCallback` defers JSON.stringify + localStorage.setItem off render frame
 - [⏸] C5-19 OffscreenCanvas pipeline — deferred: ~50–100 KB/frame serialization too costly without ECS
 - [⏸] C5-20 ECS/typed-array architecture — deferred: complete rewrite; pools already handle GC at current scale
+- [x] C5-21 Sprite caches for static glowing elements — grid drawn as a repeating
+  pattern tile (1 fillRect vs ~470 strokes/frame); hardpoints stamped from 6
+  pre-rendered state sprites; towers/ghost previews stamped from per-(type,
+  color, scale) sprites with the 15px glow baked in; rift spawn discs stamped
+  from per-(color, radius) glow sprites scaled by the pulse. Eliminates the
+  remaining per-frame `shadowBlur` hotspots so HIGH profile holds max details
+  on web.
 
 ---
 

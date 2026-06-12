@@ -32,6 +32,9 @@ migrate_working_dir/
 .pub/
 # Ignore native build artifacts but keep the web build so GitHub Pages can serve it
 /build/android/
+/build/native_assets/
+/build/test_cache/
+/build/unit_test_assets/
 /build/app/
 /build/ios/
 /build/linux/

@@ -39,6 +39,12 @@ class HardpointManager extends Component {
   final List<Hardpoint> hardpoints = [];
   late final Vector2 coreWorldPos;
 
+  // The 30 hardpoints cost several blurred strokes each; their geometry only
+  // changes when occupancy flips, so the whole layer is recorded into a
+  // Picture and re-recorded only when the occupancy signature changes.
+  Picture? _picture;
+  int _pictureSignature = -1;
+
   HardpointManager(this.worldCols, this.worldRows);
 
   @override
@@ -91,35 +97,27 @@ class HardpointManager extends Component {
     }
   }
 
-  // Find the nearest available hardpoint within snap radius
-  Hardpoint? getNearestSnap(Vector2 worldPos) {
-    Hardpoint? best;
-    double bestDist = kHardpointSnapRadius;
-    for (final hp in hardpoints) {
-      final d = hp.worldPos.distanceTo(worldPos);
-      if (d < bestDist) {
-        bestDist = d;
-        best = hp;
-      }
+  int _occupancySignature() {
+    var signature = 0;
+    for (var i = 0; i < hardpoints.length; i++) {
+      if (hardpoints[i].occupied) signature |= 1 << i;
     }
-    return best;
-  }
-
-  bool isNearAnyHardpoint(int col, int row, {double radiusCells = 1.5}) {
-    final wx = col * kGridSize + kGridSize / 2;
-    final wy = row * kGridSize + kGridSize / 2;
-    final wPos = Vector2(wx, wy);
-    for (final hp in hardpoints) {
-      if (hp.worldPos.distanceTo(wPos) < radiusCells * kGridSize) return true;
-    }
-    return false;
+    return signature;
   }
 
   @override
   void render(Canvas canvas) {
-    for (final hp in hardpoints) {
-      _renderHardpoint(canvas, hp);
+    final signature = _occupancySignature();
+    if (_picture == null || signature != _pictureSignature) {
+      final recorder = PictureRecorder();
+      final recordingCanvas = Canvas(recorder);
+      for (final hp in hardpoints) {
+        _renderHardpoint(recordingCanvas, hp);
+      }
+      _picture = recorder.endRecording();
+      _pictureSignature = signature;
     }
+    canvas.drawPicture(_picture!);
   }
 
   void _renderHardpoint(Canvas canvas, Hardpoint hp) {

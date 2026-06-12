@@ -38,7 +38,7 @@ class GameOverScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'WAVE ${game.wave}',
+              'WAVE ${game.state.wave.value}',
               style: const TextStyle(
                 fontFamily: 'Orbitron',
                 fontSize: 12,

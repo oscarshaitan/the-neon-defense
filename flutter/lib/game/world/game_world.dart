@@ -1,4 +1,4 @@
-import 'dart:ui';
+import 'dart:ui' show Color;
 
 import 'package:flame/components.dart';
 
@@ -6,17 +6,40 @@ import '../neon_defense_game.dart';
 import '../config/constants.dart';
 import 'tile_grid.dart';
 import 'hardpoint_manager.dart';
+import 'rift_path_renderer.dart';
 import '../systems/pathfinding/rift_generator.dart';
 import '../systems/wave_system.dart';
 import '../systems/spatial_grid.dart';
 import '../systems/ability_system.dart';
+import '../systems/placement_system.dart' show PlacementSystem;
 import '../systems/quality_governor.dart';
 import '../vfx/particle_system.dart';
 import '../vfx/arc_lightning.dart';
 import '../vfx/light_source.dart';
+import '../vfx/placement_preview.dart';
 import '../entities/towers/tower.dart';
 import '../entities/enemies/enemy.dart';
+import '../entities/projectiles/projectile.dart';
 import '../entities/base/core_base.dart';
+
+/// Explicit render layer order, matching the JS draw() pipeline
+/// (06_render.js:86-798): grid -> rift paths -> base -> hardpoints ->
+/// towers -> arc links -> enemies -> projectiles -> particles ->
+/// ability overlays -> lights. Entities set their own priority from these.
+class RenderLayers {
+  static const int grid = 0;
+  static const int riftPaths = 5;
+  static const int base = 10;
+  static const int hardpoints = 15;
+  static const int towers = 20;
+  static const int arcLinks = 25;
+  static const int enemies = 30;
+  static const int projectiles = 35;
+  static const int particles = 45;
+  static const int abilityOverlays = 55;
+  static const int lights = 60;
+  static const int placementPreview = 65;
+}
 
 class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
   late TileGrid tileGrid;
@@ -31,8 +54,6 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
   late QualityGovernor qualityGovernor;
   late CoreBase coreBase;
 
-  TowerType? selectedTowerType;
-
   final int worldCols;
   final int worldRows;
 
@@ -44,14 +65,16 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
   @override
   Future<void> onLoad() async {
     spatialGrid = SpatialGrid();
-    tileGrid = TileGrid(worldCols, worldRows);
-    hardpointManager = HardpointManager(worldCols, worldRows);
+    tileGrid = TileGrid(worldCols, worldRows)..priority = RenderLayers.grid;
+    hardpointManager = HardpointManager(worldCols, worldRows)
+      ..priority = RenderLayers.hardpoints;
     riftGenerator = RiftGenerator(worldCols, worldRows, hardpointManager);
     waveSystem = WaveSystem(this);
-    abilitySystem = AbilitySystem(this);
-    particles = ParticleSystem();
-    arcLightning = ArcLightning();
-    lights = LightSourceSystem();
+    abilitySystem = AbilitySystem(this)
+      ..priority = RenderLayers.abilityOverlays;
+    particles = ParticleSystem()..priority = RenderLayers.particles;
+    arcLightning = ArcLightning()..priority = RenderLayers.arcLinks;
+    lights = LightSourceSystem()..priority = RenderLayers.lights;
     qualityGovernor = QualityGovernor(
       particles: particles,
       arcLightning: arcLightning,
@@ -60,10 +83,11 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
     coreBase = CoreBase(
       worldCenter: Vector2(worldCols * kGridSize / 2, worldRows * kGridSize / 2),
       spatialGrid: spatialGrid,
-    );
+    )..priority = RenderLayers.base;
 
     await addAll([
       tileGrid,
+      RiftPathRenderer(waveSystem)..priority = RenderLayers.riftPaths,
       hardpointManager,
       coreBase,
       waveSystem,
@@ -72,91 +96,27 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
       arcLightning,
       particles,
       qualityGovernor,
+      PlacementPreview()..priority = RenderLayers.placementPreview,
     ]);
   }
 
-  // ---------------------------------------------------------------------------
-  // Rendering
-  // ---------------------------------------------------------------------------
-
+  /// Central pause/phase gate: no child logic runs unless playing,
+  /// matching the JS loop which skips update() entirely when paused.
+  /// Rendering continues; component add/remove queues are processed at
+  /// the game root, so lifecycle is unaffected.
   @override
-  void render(Canvas canvas) {
-    // Draw paths BEFORE children so towers/enemies render on top
-    _renderRiftPaths(canvas);
-    super.render(canvas);
-  }
+  void updateTree(double dt) {
+    if (!game.state.isPlaying) return;
+    game.state.frameCount++;
+    super.updateTree(dt);
 
-  void _renderRiftPaths(Canvas canvas) {
-    for (final rift in waveSystem.rifts) {
-      if (rift.points.length < 2) continue;
-
-      final pathObj = Path();
-      pathObj.moveTo(rift.points.first.x, rift.points.first.y);
-      for (int i = 1; i < rift.points.length; i++) {
-        pathObj.lineTo(rift.points[i].x, rift.points[i].y);
-      }
-
-      // 1. Wide glow background — matches JS lineWidth = GRID_SIZE * 0.8
-      canvas.drawPath(
-        pathObj,
-        Paint()
-          ..color = const Color(0x0D00F3FF) // rgba(0,243,255,0.05)
-          ..strokeWidth = kGridSize * 0.8
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-      );
-
-      // 2. Thin dashed center line — matches JS lineWidth=2, setLineDash([10,10])
-      _drawDashed(
-        canvas,
-        pathObj,
-        Paint()
-          ..color = const Color(0xFF00F3FF)
-          ..strokeWidth = 2.0
-          ..style = PaintingStyle.stroke,
-        10,
-        10,
-      );
-
-      // 3. Spawn circle at path start — matches JS arc(20), inner black arc(10)
-      final spawn = rift.points.first;
-      canvas.drawCircle(
-        Offset(spawn.x, spawn.y),
-        20,
-        Paint()
-          ..color = const Color(0xFFFF4444)
-          ..style = PaintingStyle.fill
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-      );
-      canvas.drawCircle(
-        Offset(spawn.x, spawn.y),
-        20,
-        Paint()
-          ..color = const Color(0xFFFF4444)
-          ..style = PaintingStyle.fill,
-      );
-      canvas.drawCircle(
-        Offset(spawn.x, spawn.y),
-        10,
-        Paint()
-          ..color = const Color(0xFF000000)
-          ..style = PaintingStyle.fill,
-      );
-    }
-  }
-
-  void _drawDashed(Canvas canvas, Path path, Paint paint, double dash, double gap) {
-    for (final metric in path.computeMetrics()) {
-      double dist = 0;
-      bool drawing = true;
-      while (dist < metric.length) {
-        final len = drawing ? dash : gap;
-        final end = (dist + len).clamp(0.0, metric.length);
-        if (drawing) canvas.drawPath(metric.extractPath(dist, end), paint);
-        dist += len;
-        drawing = !drawing;
-      }
+    // JS update() ends with AudioEngine.updateMusic(): threat track while a
+    // boss/mutant is alive, else the wave-indexed melody.
+    if (game.state.frameCount % 30 == 0) {
+      final hasThreat = game.entities.enemies
+          .any((e) => e.type == EnemyType.boss || e.isMutant);
+      game.audio.updateMusic(
+          wave: game.state.wave.value, hasThreat: hasThreat);
     }
   }
 
@@ -164,46 +124,80 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
   // Public API
   // ---------------------------------------------------------------------------
 
-  void selectTowerType(TowerType type) => selectedTowerType = type;
-
-  void deselect() => selectedTowerType = null;
-
   void startPrepPhase() => waveSystem.startPrepPhase();
 
   void activateAbility(AbilityType type) => abilitySystem.startTargeting(type);
 
-  void placeTower(Vector2 worldPos) {
-    if (selectedTowerType == null) return;
-    final type = selectedTowerType!;
-    final cost = kTowers[type]!.cost;
-    if (game.money < cost) return;
+  /// JS spawnSubUnits (05_loop.js:875-905): a dying splitter releases
+  /// 2-3 minis that inherit its path, progress, tier, and mutation.
+  void spawnMinis(Enemy parentEnemy) {
+    final rng = waveSystem.rng;
+    final miniCount = 2 + rng.nextInt(2);
+    final miniDef = kEnemies[EnemyType.mini]!;
 
-    final hp = hardpointManager.getNearestSnap(worldPos);
-    if (hp == null) return;
-    if (hp.occupied) return;
+    for (var i = 0; i < miniCount; i++) {
+      final offset = Vector2(
+        (rng.nextDouble() - 0.5) * 20,
+        (rng.nextDouble() - 0.5) * 20,
+      );
+      add(Enemy(
+        type: EnemyType.mini,
+        hp: parentEnemy.maxHp * 0.2,
+        speed: parentEnemy.speed * 1.5,
+        color: parentEnemy.color,
+        reward: miniDef.reward,
+        width: miniDef.width,
+        path: parentEnemy.path,
+        riftLevel: parentEnemy.riftLevel,
+        isMutant: parentEnemy.isMutant,
+        mutationKey: parentEnemy.mutationKey,
+        spatialGrid: spatialGrid,
+        spawnPos: parentEnemy.position + offset,
+        startPathIndex: parentEnemy.pathIndex,
+      ));
+    }
+  }
 
-    hp.occupied = true;
-    final placePos = hp.worldPos.clone();
-
-    game.money -= cost;
-    final tower = Tower(
-      position: placePos,
-      type: type,
-      spatialGrid: spatialGrid,
-      hardpoint: hp,
-    );
-    add(tower);
-    selectedTowerType = null;
+  /// JS generateNewPath tower destruction (04_tutorial.js:609-632): a new
+  /// rift destroys overlapping non-hardpoint towers with a 70% refund.
+  void destroyTowersOnPath(List<Vector2> pathPoints) {
+    final tolerance = kGridSize / 2;
+    final doomed = <Tower>[];
+    for (final t in game.entities.towers) {
+      if (t.hardpoint != null) continue;
+      for (var j = 0; j < pathPoints.length - 1; j++) {
+        if (PlacementSystem.segmentBoxHit(
+            t.position, pathPoints[j], pathPoints[j + 1], tolerance)) {
+          doomed.add(t);
+          break;
+        }
+      }
+    }
+    for (final t in doomed) {
+      game.state.money.value +=
+          (t.baseCost * t.level * 0.7).floorToDouble();
+      particles.createParticles(
+          t.position.x, t.position.y, const Color(0xFFFFFFFF), 10);
+      removeTower(t);
+    }
   }
 
   void removeTower(Tower t) {
     t.hardpoint?.occupied = false;
-    game.selectTower(null);
+    if (game.selection.selectedTower == t) {
+      game.selection.selectTower(null);
+    }
     t.removeFromParent();
   }
 
+  /// Must only be called while gameplay is halted (game over, pause-menu
+  /// reset, or save load) with isWaveActive already false: the registry and
+  /// spatial grid are cleared synchronously here, while Flame drains the
+  /// component-removal queue a frame later — wave-end checks running in
+  /// that window would see an empty registry.
   void reset() {
-    removeWhere((c) => c is Tower || c is Enemy);
+    removeWhere((c) => c is Tower || c is Enemy || c is Projectile);
+    game.entities.clear();
     for (final hp in hardpointManager.hardpoints) {
       hp.occupied = false;
     }
@@ -211,6 +205,5 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
     waveSystem.reset();
     spatialGrid.clear();
     abilitySystem.cancelTargeting();
-    selectedTowerType = null;
   }
 }

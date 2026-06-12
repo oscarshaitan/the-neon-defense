@@ -6,8 +6,15 @@ import 'config/constants.dart';
 import 'world/game_world.dart';
 import 'camera/game_camera.dart';
 import 'audio/audio_manager.dart';
-import 'entities/towers/tower.dart';
+import 'input/input_router.dart';
+import 'state/entity_registry.dart';
+import 'state/game_state.dart';
+import 'state/selection_state.dart';
+import 'systems/ability_system.dart';
+import 'systems/hint_system.dart';
+import 'systems/placement_system.dart';
 import 'systems/save_system.dart';
+import 'systems/tutorial_system.dart';
 
 class NeonDefenseGame extends FlameGame
     with ScaleDetector, HasKeyboardHandlerComponents, TapCallbacks {
@@ -15,25 +22,35 @@ class NeonDefenseGame extends FlameGame
   late GameCamera gameCamera;
   final AudioManager audio = AudioManager();
   late SaveSystem saveSystem;
+  late InputRouter inputRouter;
+  late PlacementSystem placement;
+  late TutorialSystem tutorial;
+  late HintSystem hints;
 
-  // --- Game state ---
-  double money = kStartingMoney;
-  int lives = kStartingLives;
-  double energy = kStartingEnergy;
-  double get maxEnergy => kMaxEnergy;
-  int wave = 1;
-  bool isWaveActive = false;
-  bool isPaused = false;
-  String gameState = 'start'; // 'start' | 'playing' | 'gameover'
+  final GameState state = GameState();
+  final SelectionState selection = SelectionState();
+  final EntityRegistry entities = EntityRegistry();
 
-  Tower? selectedTower;
+  // JS playShootSFX throttle (05_loop.js:691-700): min interval by quality.
+  int _lastShootSfxFrame = -1000000;
 
-  void selectTower(Tower? tower) {
-    selectedTower?.isSelected = false;
-    selectedTower = tower;
-    tower?.isSelected = true;
-    if (tower != null) gameWorld.selectedTowerType = null;
+  void playShootSfx() {
+    final minInterval = switch (gameWorld.qualityGovernor.currentProfile) {
+      QualityProfile.high => 1,
+      QualityProfile.balanced => 2,
+      QualityProfile.low => 3,
+    };
+    if (state.frameCount - _lastShootSfxFrame < minInterval) return;
+    _lastShootSfxFrame = state.frameCount;
+    audio.playShoot();
   }
+
+  // Fixed 60 Hz logic stepping so JS frame-based numbers (cooldowns in
+  // frames, spawn every 60 frames, stun 30 frames) transfer 1:1 regardless
+  // of display refresh rate.
+  static const double _step = 1 / 60;
+  static const int _maxStepsPerFrame = 4;
+  double _accumulator = 0;
 
   @override
   Color backgroundColor() => kColorBg;
@@ -42,8 +59,15 @@ class NeonDefenseGame extends FlameGame
   Future<void> onLoad() async {
     gameCamera = GameCamera(this);
     gameWorld = GameWorld(this);
+    inputRouter = InputRouter(this);
+    placement = PlacementSystem(this);
 
     saveSystem = SaveSystem(this);
+    tutorial = TutorialSystem(this);
+    hints = HintSystem(this);
+    await tutorial.loadCompletionFlag();
+    await hints.loadSeen();
+    state.playerName = await saveSystem.loadPlayerName();
     await audio.init();
     camera = gameCamera.cameraComponent;
     world.add(gameWorld);
@@ -51,24 +75,34 @@ class NeonDefenseGame extends FlameGame
 
   @override
   void update(double dt) {
-    super.update(dt);
-    if (gameState == 'playing' && !isPaused) {
+    if (state.isPlaying) {
       gameWorld.qualityGovernor.recordFrameMs(dt * 1000);
     }
+
+    // Screen shake decays per render frame (JS draw()).
+    if (state.shakeAmount > 0) {
+      state.shakeAmount *= 0.9;
+      if (state.shakeAmount < 0.1) state.shakeAmount = 0;
+    }
+    gameCamera.applyShake(state.shakeAmount);
+
+    _accumulator += dt;
+    var steps = 0;
+    while (_accumulator >= _step && steps < _maxStepsPerFrame) {
+      super.update(_step);
+      _accumulator -= _step;
+      steps++;
+    }
+    // Drop time we can't catch up on (avoids spiral of death after jank).
+    if (_accumulator >= _step) _accumulator = 0;
+
+    if (state.isPlaying) saveSystem.flushQueuedAutoSave();
   }
 
   @override
   void onTapDown(TapDownEvent event) {
-    if (gameState != 'playing' || isPaused) return;
     final worldPos = gameCamera.screenToWorld(event.canvasPosition);
-    final ability = gameWorld.abilitySystem;
-    if (ability.isTargeting) {
-      ability.useAbility(worldPos);
-    } else if (gameWorld.selectedTowerType != null) {
-      gameWorld.placeTower(worldPos);
-    } else {
-      selectTower(null);
-    }
+    inputRouter.handleTap(worldPos);
   }
 
   @override
@@ -85,47 +119,131 @@ class NeonDefenseGame extends FlameGame
   void handleKeyDown(LogicalKeyboardKey key) {
     switch (key) {
       case LogicalKeyboardKey.keyQ:
-        gameWorld.selectTowerType(TowerType.basic);
+        chooseTowerType(TowerType.basic);
         break;
       case LogicalKeyboardKey.keyW:
-        gameWorld.selectTowerType(TowerType.rapid);
+        chooseTowerType(TowerType.rapid);
         break;
       case LogicalKeyboardKey.keyE:
-        gameWorld.selectTowerType(TowerType.sniper);
+        chooseTowerType(TowerType.sniper);
         break;
       case LogicalKeyboardKey.keyR:
-        gameWorld.selectTowerType(TowerType.arc);
+        chooseTowerType(TowerType.arc);
         break;
-      case LogicalKeyboardKey.escape:
-        gameWorld.deselect();
+      case LogicalKeyboardKey.digit1:
+        gameWorld.activateAbility(AbilityType.emp);
+        break;
+      case LogicalKeyboardKey.digit2:
+        gameWorld.activateAbility(AbilityType.overclock);
+        break;
+      case LogicalKeyboardKey.keyU:
+        upgradeSelectedTower();
+        break;
+      case LogicalKeyboardKey.delete:
+      case LogicalKeyboardKey.backspace:
+        sellSelectedTower();
         break;
       default:
         break;
     }
   }
 
+  /// Esc is two-stage like JS: first clears any selection, then pauses.
+  void handleEscape() {
+    if (selection.selectedTower != null ||
+        selection.selectedRift != null ||
+        selection.selectedBase ||
+        selection.buildTarget != null ||
+        selection.selectedTowerType != null ||
+        gameWorld.abilitySystem.isTargeting) {
+      gameWorld.abilitySystem.cancelTargeting();
+      selection.clear();
+      return;
+    }
+    togglePause();
+  }
+
+  void upgradeSelectedTower() {
+    final tower = selection.selectedTower;
+    if (tower == null) return;
+    if (state.money.value < tower.upgradeCost) return;
+    state.money.value -= tower.upgradeCost;
+    tower.upgrade();
+    gameWorld.particles.createParticles(
+        tower.position.x, tower.position.y, const Color(0xFF00FF41), 15);
+    saveSystem.save(); // JS saves on upgrade
+  }
+
+  void sellSelectedTower() {
+    final tower = selection.selectedTower;
+    if (tower == null) return;
+    state.money.value += tower.sellValue;
+    gameWorld.particles.createParticles(
+        tower.position.x, tower.position.y, const Color(0xFFFFFFFF), 10);
+    gameWorld.removeTower(tower);
+    saveSystem.save(); // JS saves on sell
+  }
+
+  /// JS window.selectTower (04_tutorial.js:768-786): with a build target
+  /// chosen, picking a tower type builds there immediately; otherwise it
+  /// just arms the type.
+  void chooseTowerType(TowerType type) {
+    final target = selection.buildTarget;
+    if (target != null) {
+      placement.buildTower(target, type);
+      return;
+    }
+    selection.selectTowerType(type);
+  }
+
+  void togglePause() {
+    if (state.phase.value != GamePhase.playing) return;
+    state.isPaused.value = !state.isPaused.value;
+    if (state.isPaused.value) {
+      overlays.add('pauseMenu');
+      audio.pauseMusic();
+    } else {
+      overlays.remove('pauseMenu');
+      audio.resumeMusic();
+    }
+  }
+
   void startGame() {
-    gameState = 'playing';
+    state.phase.value = GamePhase.playing;
     overlays.remove('startScreen');
     overlays.add('hud');
     gameWorld.startPrepPhase();
+    tutorial.maybeStart();
+  }
+
+  /// CONTINUE from the start screen: restore the save, then enter a prep
+  /// phase (JS loadGame).
+  Future<void> continueGame() async {
+    final loaded = await saveSystem.load();
+    if (!loaded) {
+      startGame();
+      return;
+    }
+    state.phase.value = GamePhase.playing;
+    overlays.remove('startScreen');
+    overlays.add('hud');
+    gameCamera.resetCamera();
   }
 
   void gameOver() {
-    gameState = 'gameover';
+    saveSystem.flushQueuedAutoSave(force: true);
+    saveSystem.save(); // JS saves on game over
+    audio.playHit(); // JS plays 'hit' on system failure
+    audio.stopMusic();
+    state.phase.value = GamePhase.gameover;
     overlays.remove('hud');
     overlays.add('gameOverScreen');
   }
 
   void resetGame() {
-    money = kStartingMoney;
-    lives = kStartingLives;
-    energy = kStartingEnergy;
-    wave = 1;
-    isWaveActive = false;
-    isPaused = false;
-    gameState = 'playing';
-    selectTower(null);
+    state.reset();
+    state.phase.value = GamePhase.playing;
+    selection.clear();
     overlays.remove('gameOverScreen');
     overlays.add('hud');
     gameWorld.reset();

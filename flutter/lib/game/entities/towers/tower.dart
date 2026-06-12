@@ -1,22 +1,23 @@
 import 'dart:math';
 import 'dart:ui';
 import 'package:flame/components.dart';
-import 'package:flame/events.dart';
 
 import '../../config/constants.dart';
 import '../../neon_defense_game.dart';
 import '../../systems/spatial_grid.dart';
+import '../../vfx/render_utils.dart';
+import '../../world/game_world.dart' show RenderLayers;
 import '../../world/hardpoint_manager.dart';
 import '../enemies/enemy.dart';
 import '../projectiles/projectile.dart';
 
 class Tower extends PositionComponent
-    with TapCallbacks, HasGameReference<NeonDefenseGame> {
+    with HasGameReference<NeonDefenseGame> {
   final TowerType type;
   double damage;
   double range;
   int cooldown; // current cooldown counter (counts down)
-  final int maxCooldown;
+  int maxCooldown; // mutable so saves can restore it
   final Color color;
   final double baseCost;
   double totalCost;
@@ -46,7 +47,7 @@ class Tower extends PositionComponent
             (hardpoint?.damageMult ?? 1.0),
         range = (kTowers[type]!.range *
             (hardpoint?.rangeMult ?? 1.0))
-            .clamp(0, 800),
+            .clamp(0, kMaxTowerRange),
         // JS: Math.max(4, towerConfig.cooldown * hardpointRules.cooldownMult)
         maxCooldown = hardpoint != null
             ? max(4, (kTowers[type]!.cooldown * hardpoint.cooldownMult).round())
@@ -61,65 +62,99 @@ class Tower extends PositionComponent
           position: position,
           size: Vector2.all(kGridSize * (hardpoint?.scaleMult ?? 1.0)),
           anchor: Anchor.center,
+          priority: RenderLayers.towers,
         );
 
   @override
+  void onMount() {
+    super.onMount();
+    game.entities.towers.add(this);
+  }
+
+  @override
+  void onRemove() {
+    game.entities.towers.remove(this);
+    super.onRemove();
+  }
+
+  @override
   void update(double dt) {
+    // JS updateTowers (05_loop.js:1351-1397): overclock doubles the cooldown
+    // decrement rate rather than halving maxCooldown.
+    var cdRate = 1;
     if (overclocked) {
+      cdRate = 2;
       overclockTimer--;
       if (overclockTimer <= 0) overclocked = false;
+      // JS overclock trail: yellow particle every 14 frames.
+      if (game.state.frameCount % 14 == 0) {
+        game.gameWorld.particles.createParticles(
+            position.x, position.y, const Color(0xFFFCEE0A), 1, priority: 0);
+      }
     }
 
-    if (cooldown > 0) {
-      cooldown--;
-      return;
-    }
+    if (cooldown > 0) cooldown -= cdRate;
 
     final target = _findTarget();
-    if (target != null) {
+    if (target != null && cooldown <= 0) {
       _fire(target);
-      final effectiveCooldown = overclocked
-          ? (maxCooldown * 0.5).round()
-          : maxCooldown;
-      cooldown = effectiveCooldown;
+      cooldown = maxCooldown;
     }
   }
 
+  /// JS targeting: bulwark taunters in range take priority; otherwise the
+  /// nearest targetable (non-invisible) enemy.
   Enemy? _findTarget() {
-    final candidates = spatialGrid.queryRadius(position, range);
+    var candidates = spatialGrid.queryTaunters(position, range);
+    if (candidates.isEmpty) {
+      candidates = spatialGrid.queryRadius(position, range);
+    }
     if (candidates.isEmpty) return null;
-    // Prioritize enemy closest to end of its path (most progress)
-    candidates.sort((a, b) => b.pathIndex.compareTo(a.pathIndex));
-    return candidates.first;
+
+    Enemy? nearest;
+    var minDist2 = double.infinity;
+    for (final e in candidates) {
+      final d2 = e.position.distanceToSquared(position);
+      if (d2 < minDist2) {
+        minDist2 = d2;
+        nearest = e;
+      }
+    }
+    return nearest;
   }
 
   void _fire(Enemy target) {
-    final projectileSpeed = 6.0;
     final proj = Projectile(
       startPos: position.clone(),
       target: target,
       damage: damage,
-      speed: projectileSpeed,
+      speed: 10.0, // JS spawnProjectile(..., 10, ...) for towers
       color: color,
     );
     parent?.add(proj);
+    // JS shoot(): muzzle flash light r40 + throttled shoot SFX.
+    game.gameWorld.lights
+        .emit(x: position.x, y: position.y, radius: 40, color: color);
+    game.playShootSfx();
   }
 
   // ---------------------------------------------------------------------------
   // Upgrades
   // ---------------------------------------------------------------------------
 
-  double get upgradeCost => baseCost * 0.5 * level;
+  double get upgradeCost =>
+      (baseCost * 0.5 * level).floorToDouble(); // JS getUpgradeCost
 
   void upgrade() {
     final cost = upgradeCost; // capture before level++ (JS: getUpgradeCost called before level++)
     level++;
     damage *= 1.2;
-    range = (range * 1.1).clamp(0, 800);
+    range = (range * 1.1).clamp(0, kMaxTowerRange);
     totalCost += cost;
   }
 
-  double get sellValue => totalCost * 0.7; // JS: Math.floor(totalCost * 0.7)
+  double get sellValue =>
+      (totalCost * 0.7).floorToDouble(); // JS: Math.floor(totalCost * 0.7)
 
   // ---------------------------------------------------------------------------
   // Rendering
@@ -127,95 +162,54 @@ class Tower extends PositionComponent
 
   @override
   void render(Canvas canvas) {
-    final halfW = size.x / 2;
-    final baseColor = isSelected
-        ? color.withAlpha(255)
-        : color.withAlpha(200);
+    final frameCount = game.state.frameCount;
 
-    // Draw shape based on type
-    switch (type) {
-      case TowerType.basic:
-        canvas.drawRect(
-          Rect.fromCenter(center: Offset.zero, width: size.x, height: size.y),
-          Paint()..color = baseColor..style = PaintingStyle.fill,
-        );
-        break;
-      case TowerType.rapid:
-        canvas.drawCircle(
-          Offset.zero, halfW,
-          Paint()..color = baseColor..style = PaintingStyle.fill,
-        );
-        break;
-      case TowerType.sniper:
-        _drawDiamond(canvas, halfW, baseColor);
-        break;
-      case TowerType.arc:
-        _drawHexagon(canvas, halfW, baseColor);
-        break;
-    }
+    // JS tower silhouettes at exact sizes (drawTowerOne).
+    drawTowerShape(canvas, type, 0, 0, color, scaleMult);
 
-    // Level pips
+    // Level pips — diamond per 5 levels + dot per 1 (JS drawLevelPips).
     if (level > 1) {
-      for (int i = 0; i < min(level - 1, 5); i++) {
-        final pipX = -halfW + 4 + i * 5.0;
-        canvas.drawCircle(
-          Offset(pipX, halfW + 4),
-          2,
-          Paint()..color = color,
-        );
-      }
+      drawLevelPips(canvas, level, 0, 20);
     }
 
-    // Range ring when selected
+    // Selection: white dashed range circle + fill + 36x36 frame
+    // (JS 06_render.js:781-792).
     if (isSelected) {
       canvas.drawCircle(
+          Offset.zero, range, Paint()..color = const Color(0x1AFFFFFF));
+      drawDashedCircle(
+        canvas,
         Offset.zero,
         range,
         Paint()
-          ..color = color.withAlpha(30)
+          ..color = const Color(0xFFFFFFFF)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1,
+        5,
+        5,
+      );
+      canvas.drawRect(
+        Rect.fromCenter(center: Offset.zero, width: 36, height: 36),
+        Paint()
+          ..color = const Color(0xFFFFFFFF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
       );
     }
 
-    // Overclock pulse
+    // Overclock pulse — yellow ring + white core (JS 06_render.js:701-717).
     if (overclocked) {
+      final pulse = 1 + sin(frameCount * 0.5) * 0.2;
       canvas.drawCircle(
         Offset.zero,
-        halfW + 4 + sin(overclockTimer * 0.2) * 3,
+        20 * pulse,
         Paint()
-          ..color = const Color(0xAAFCEE0A)
+          ..color = const Color(0xFFFCEE0A)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5,
+          ..strokeWidth = 2,
       );
+      canvas.drawCircle(
+          Offset.zero, 18 * pulse, Paint()..color = const Color(0x4DFFFFFF));
     }
-  }
-
-  void _drawDiamond(Canvas canvas, double halfW, Color c) {
-    final path = Path()
-      ..moveTo(0, -halfW)
-      ..lineTo(halfW, 0)
-      ..lineTo(0, halfW)
-      ..lineTo(-halfW, 0)
-      ..close();
-    canvas.drawPath(path, Paint()..color = c);
-  }
-
-  void _drawHexagon(Canvas canvas, double halfW, Color c) {
-    final path = Path();
-    for (int i = 0; i < 6; i++) {
-      final angle = pi / 6 + i * pi / 3;
-      final x = halfW * cos(angle);
-      final y = halfW * sin(angle);
-      if (i == 0) { path.moveTo(x, y); } else { path.lineTo(x, y); }
-    }
-    path.close();
-    canvas.drawPath(path, Paint()..color = c);
-  }
-
-  @override
-  void onTapDown(TapDownEvent event) {
-    game.selectTower(this);
-    event.handled = true;
   }
 }

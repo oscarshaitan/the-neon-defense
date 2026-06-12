@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../game/neon_defense_game.dart';
-import '../../game/entities/enemies/enemy.dart';
 
 class StatsBar extends StatelessWidget {
   final NeonDefenseGame game;
@@ -9,7 +8,8 @@ class StatsBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ws = game.gameWorld.waveSystem;
-    final remaining = game.gameWorld.children.whereType<Enemy>().length;
+    final state = game.state;
+    final remaining = game.entities.enemies.length;
 
     return SafeArea(
       child: Column(
@@ -33,20 +33,25 @@ class StatsBar extends StatelessWidget {
               children: [
                 // Left: Wave + Lives
                 Row(mainAxisSize: MainAxisSize.min, children: [
-                  _stat('WAVE', '${game.wave}'),
+                  // JS: tapping the wave counter opens Wave Intel.
+                  GestureDetector(
+                    onTap: () => game.state.waveIntelOpen.value =
+                        !game.state.waveIntelOpen.value,
+                    child: _stat('WAVE', '${state.wave.value}'),
+                  ),
                   const SizedBox(width: 20),
-                  _stat('LIVES', '${game.lives}'),
+                  _stat('LIVES', '${state.lives.value}'),
                 ]),
                 // Center: Timer or enemy count
                 if (ws.isPrepPhase)
                   _stat('NEXT WAVE', '${ws.prepTimer.ceil()}s',
                       color: const Color(0xFF00FF41))
-                else if (game.isWaveActive)
+                else if (state.isWaveActive.value)
                   _stat('ENEMIES', '$remaining',
                       color: const Color(0xFFFF4444)),
                 // Right: Credits + Pause
                 Row(mainAxisSize: MainAxisSize.min, children: [
-                  _stat('CREDITS', '${game.money.toInt()}',
+                  _stat('CREDITS', '${state.money.value.toInt()}',
                       color: const Color(0xFFFCEE0A)),
                   const SizedBox(width: 12),
                   _pauseBtn(context),
@@ -117,14 +122,7 @@ class StatsBar extends StatelessWidget {
 
   Widget _pauseBtn(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        game.isPaused = !game.isPaused;
-        if (game.isPaused) {
-          game.overlays.add('pauseMenu');
-        } else {
-          game.overlays.remove('pauseMenu');
-        }
-      },
+      onTap: game.togglePause,
       child: Container(
         width: 30,
         height: 30,
