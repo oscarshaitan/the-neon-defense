@@ -94,8 +94,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			camera.position -= event.relative / camera.zoom.x
 	elif event is InputEventMagnifyGesture:
 		_zoom_at(event.factor, get_viewport().get_visible_rect().size / 2.0)
-	elif event is InputEventKey and event.pressed and not event.echo:
-		_handle_key(event.keycode)
+	elif event is InputEventKey and event.pressed:
+		# Allow OS key-repeat (echo) for the buy/upgrade keys so holding them
+		# keeps purchasing; other keys fire once per press.
+		if not event.echo or event.keycode in [KEY_U, KEY_F, KEY_G]:
+			_handle_key(event.keycode)
 
 func _zoom_at(factor: float, _screen_pos: Vector2) -> void:
 	var z := clampf(camera.zoom.x * factor, 0.1, 1.0)
