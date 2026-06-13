@@ -64,6 +64,10 @@ class Projectile:
 var enemies: Array[Enemy] = []
 var towers: Array[Tower] = []
 var projectiles: Array[Projectile] = []
+# Arc-tower network (JS arcTowerLinks): [{a: Tower, b: Tower, strength: int}].
+# Rebuilt lazily whenever towers are added/removed.
+var arc_tower_links: Array = []
+var _arc_network_dirty := true
 var hardpoints: Array[Dictionary] = [] # {id, type, cell, pos, occupied}
 var rifts: Array[Dictionary] = [] # {cells, points, level, zone, mutation}
 
@@ -474,6 +478,7 @@ func apply_static(e: Enemy, amount: float) -> void:
 # ---------------------------------------------------------------------------
 
 func _step_towers() -> void:
+	_refresh_arc_network()
 	for t in towers:
 		var cd_rate := 1
 		if t.overclocked:
@@ -489,6 +494,72 @@ func _step_towers() -> void:
 		if target != null and t.cooldown <= 0:
 			_fire(t, target)
 			t.cooldown = t.max_cooldown
+
+## JS isArcLinkPair: two arc towers link when cardinally aligned and 1–3 cells
+## apart (Manhattan).
+func _is_arc_link_pair(a: Tower, b: Tower) -> bool:
+	var ac := floori(a.pos.x / C.GRID_SIZE)
+	var ar := floori(a.pos.y / C.GRID_SIZE)
+	var bc := floori(b.pos.x / C.GRID_SIZE)
+	var br := floori(b.pos.y / C.GRID_SIZE)
+	var dc := absi(ac - bc)
+	var dr := absi(ar - br)
+	var spacing := dc + dr
+	var aligned := (dc == 0 and dr > 0) or (dr == 0 and dc > 0)
+	if not aligned:
+		return false
+	return spacing >= C.ARC_MIN_LINK_CELLS and spacing <= C.ARC_MAX_LINK_CELLS
+
+## JS refreshArcTowerNetwork: build link adjacency, find connected components
+## via DFS, and grant each member a bonus = component size (capped). Each link's
+## strength = max bonus of its endpoints. Rebuilt only when towers change.
+func _refresh_arc_network() -> void:
+	if not _arc_network_dirty:
+		return
+	_arc_network_dirty = false
+
+	var arc_towers: Array[Tower] = []
+	for t in towers:
+		if t.type == &"arc":
+			arc_towers.append(t)
+	arc_tower_links = []
+	if arc_towers.is_empty():
+		return
+
+	var adjacency := {}
+	for t in arc_towers:
+		adjacency[t] = []
+	for i in arc_towers.size():
+		for j in range(i + 1, arc_towers.size()):
+			var a: Tower = arc_towers[i]
+			var b: Tower = arc_towers[j]
+			if not _is_arc_link_pair(a, b):
+				continue
+			adjacency[a].append(b)
+			adjacency[b].append(a)
+			arc_tower_links.append({a = a, b = b, strength = 1})
+
+	var visited := {}
+	for t in arc_towers:
+		if visited.has(t):
+			continue
+		var stack: Array[Tower] = [t]
+		var component: Array[Tower] = []
+		visited[t] = true
+		while not stack.is_empty():
+			var node: Tower = stack.pop_back()
+			component.append(node)
+			for next in adjacency[node]:
+				if visited.has(next):
+					continue
+				visited[next] = true
+				stack.append(next)
+		var bonus := clampi(component.size(), 1, C.ARC_MAX_BONUS)
+		for node in component:
+			node.arc_bonus = bonus
+
+	for link in arc_tower_links:
+		link.strength = clampi(maxi(link.a.arc_bonus, link.b.arc_bonus), 1, C.ARC_MAX_BONUS)
 
 func _step_base() -> void:
 	if base_level <= 0:
@@ -636,6 +707,7 @@ func build_tower(world_pos: Vector2, type: StringName) -> bool:
 		t.scale = mult.scale
 		hardpoints_changed.emit()
 	towers.append(t)
+	_arc_network_dirty = true
 	create_particles(v.snap, def.color, 5)
 	AudioEngine.play_sfx(&"build")
 	State.select_tower(t) # JS keeps the new tower selected
@@ -651,6 +723,7 @@ func remove_tower(t: Tower) -> void:
 	if State.selected_tower == t:
 		State.select_tower(null)
 	towers.erase(t)
+	_arc_network_dirty = true
 
 func upgrade_selected() -> void:
 	var t: Tower = State.selected_tower
@@ -767,7 +840,8 @@ func add_light(pos: Vector2, radius: float, color: Color) -> void:
 func add_arc_burst(a: Vector2, b: Vector2, intensity: int) -> void:
 	if arc_bursts.size() >= C.QUALITY_PROFILES[quality].max_arc_bursts:
 		return
-	arc_bursts.append({a = a, b = b, life = 8, intensity = clampi(intensity, 1, 5)})
+	arc_bursts.append({a = a, b = b, life = 8, intensity = clampi(intensity, 1, 5),
+			phase = rng.randf() * TAU})
 
 func _step_effects() -> void:
 	var i := particles.size() - 1
@@ -780,7 +854,9 @@ func _step_effects() -> void:
 		i -= 1
 	i = lights.size() - 1
 	while i >= 0:
-		lights[i].life -= 0.03
+		# JS decays light life by 0.1/frame (~10-frame punchy muzzle flash);
+		# the old 0.03 lingered ~3× too long and read as a dim blob.
+		lights[i].life -= 0.1
 		if lights[i].life <= 0.0:
 			lights.remove_at(i)
 		i -= 1
@@ -867,6 +943,8 @@ func game_over() -> void:
 func reset() -> void:
 	enemies.clear()
 	towers.clear()
+	arc_tower_links.clear()
+	_arc_network_dirty = true
 	projectiles.clear()
 	particles.clear()
 	lights.clear()

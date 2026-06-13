@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui' show Color;
 import 'package:flame/components.dart';
+import 'package:flutter/foundation.dart';
 
 import '../config/constants.dart';
 import '../world/game_world.dart';
@@ -255,18 +256,26 @@ Future<void> _generateMissingRifts() async {
     }
     targetRifts = targetRifts.clamp(1, 20);
 
-    while (rifts.length < targetRifts) {
-      final rift = await gameWorld.riftGenerator.generateRift(
-        existingPaths: rifts,
-        wave: wave,
-      );
-      if (rift != null) {
-        rifts.add(rift);
-        // New rifts destroy overlapping non-hardpoint towers (70% refund).
-        gameWorld.destroyTowersOnPath(rift.points);
-      } else {
-        break; // couldn't generate more
+    try {
+      while (rifts.length < targetRifts) {
+        final rift = await gameWorld.riftGenerator.generateRift(
+          existingPaths: rifts,
+          wave: wave,
+        );
+        if (rift != null) {
+          rifts.add(rift);
+          // New rifts destroy overlapping non-hardpoint towers (70% refund).
+          gameWorld.destroyTowersOnPath(rift.points);
+        } else {
+          break; // couldn't generate more
+        }
       }
+    } catch (e, st) {
+      // This future is fire-and-forget from startPrepPhase(); without this
+      // guard a generation failure is silently swallowed and the wave starts
+      // with zero rifts (no enemies ever spawn). Surface it loudly instead.
+      debugPrint('Rift generation failed: $e\n$st');
+      assert(false, 'Rift generation failed: $e');
     }
   }
 }
