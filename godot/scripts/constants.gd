@@ -36,6 +36,12 @@ const ENEMIES := {
 # --- Arc tower rules ---
 const ARC_STATIC_THRESHOLD := 100.0
 const ARC_STUN_FRAMES := 30
+# Inter-tower lightning network (JS ARC_TOWER_RULES): cardinally aligned arc
+# towers 1–3 cells apart link up; a connected component grants every member a
+# bonus equal to its size (capped at maxBonus).
+const ARC_MIN_LINK_CELLS := 1
+const ARC_MAX_LINK_CELLS := 3
+const ARC_MAX_BONUS := 5
 
 # --- Hardpoints (JS HARDPOINT_RULES) ---
 const HP_SNAP_RADIUS := GRID_SIZE * 0.45

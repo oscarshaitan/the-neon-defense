@@ -80,26 +80,69 @@ class StaticWorldLayer extends Node2D:
 ## Everything that moves — redrawn each frame in the JS draw() order.
 class DynamicLayer extends Node2D:
 	var world: World
-	var _rng := RandomNumberGenerator.new()
+	# Cached soft radial-gradient sprite for muzzle flashes / dynamic lights —
+	# the Godot analogue of the JS LIGHT_GRADIENT_CACHE (white core → transparent
+	# edge), drawn modulated per light. One texture, reused for every flash.
+	var _light_tex: GradientTexture2D
+
+	# Arc-link stroke styles per intensity (JS _LINK_STYLES): a dot → dash →
+	# solid progression. Level 5 (= ARC_MAX_BONUS) is a solid neon double-stroke.
+	const _LINK_STYLES := [
+		{on = 1.0, off = 16.0, w = 1.3, color = Color(0.392, 0.725, 0.949, 0.42)},
+		{on = 2.0, off = 11.0, w = 1.6, color = Color(0.463, 0.792, 0.988, 0.55)},
+		{on = 5.0, off = 8.0, w = 1.8, color = Color(0.533, 0.855, 1.0, 0.67)},
+		{on = 12.0, off = 4.0, w = 2.1, color = Color(0.647, 0.910, 1.0, 0.80)},
+	]
 
 	func _ready() -> void:
 		z_index = 2
+		var grad := Gradient.new()
+		grad.set_color(0, Color(1, 1, 1, 1))
+		grad.set_color(1, Color(1, 1, 1, 0))
+		_light_tex = GradientTexture2D.new()
+		_light_tex.gradient = grad
+		_light_tex.fill = GradientTexture2D.FILL_RADIAL
+		_light_tex.fill_from = Vector2(0.5, 0.5)
+		_light_tex.fill_to = Vector2(1.0, 0.5)
+		_light_tex.width = 64
+		_light_tex.height = 64
 
 	func _process(_delta: float) -> void:
 		queue_redraw()
 
 	func _draw() -> void:
 		var frame := State.frame_count
+		if world.show_no_build_overlay:
+			_draw_no_build_overlay()
 		_draw_spawn_discs(frame)
 		_draw_base(frame)
 		_draw_build_target(frame)
 		_draw_towers(frame)
+		_draw_arc_tower_links()
 		_draw_enemies(frame)
 		_draw_projectiles()
 		_draw_arc_bursts()
 		_draw_particles()
 		_draw_lights()
 		_draw_targeting_overlay()
+
+	## JS spatial-zoning debug overlay: zone-0 no-rift disc, concentric zone
+	## rings (every 3 cells), and the wide no-build buffer along each rift.
+	func _draw_no_build_overlay() -> void:
+		var center := world.core_pos
+		var zone0 := C.ZONE0_RADIUS_CELLS * C.GRID_SIZE
+		draw_circle(center, zone0, Color(1, 0, 0, 0.05))
+		draw_arc(center, zone0, 0, TAU, 64, Color(1, 0, 0, 0.4), 2.0)
+		var r := C.ZONE0_RADIUS_CELLS + 3
+		while r < 60:
+			draw_arc(center, r * C.GRID_SIZE, 0, TAU, 64, Color(C.COL_BLUE, 0.2), 2.0)
+			r += 3
+		# No-build buffers (~1.5 cells each side) along every rift.
+		var buffer := C.GRID_SIZE * 1.5
+		for rift in world.rifts:
+			var points: PackedVector2Array = rift.points
+			if points.size() >= 2:
+				draw_polyline(points, Color(1, 0, 0, 0.3), buffer * 2.0)
 
 	func _draw_spawn_discs(frame: int) -> void:
 		var pulse := 1.0 + sin(frame * 0.1) * 0.2
@@ -294,20 +337,37 @@ class DynamicLayer extends Node2D:
 
 	func _draw_arc_bursts() -> void:
 		for burst in world.arc_bursts:
-			var alpha: float = clampf(burst.life / 8.0, 0, 1) * 0.8
-			var a: Vector2 = burst.a
-			var b: Vector2 = burst.b
-			var dir: Vector2 = b - a
-			var len := maxf(1.0, dir.length())
-			var normal := Vector2(-dir.y, dir.x) / len
-			var pts := PackedVector2Array([a])
-			for s in range(1, 3):
-				var t := s / 3.0
-				pts.append(a + dir * t + normal * (_rng.randf() - 0.5) * 12.0 * burst.intensity)
-			pts.append(b)
-			draw_polyline(pts, Color("7cd7ff", alpha), 0.5 + burst.intensity * 0.4)
-			if burst.intensity >= 4:
-				draw_polyline(pts, Color("7cd7ff", alpha / 3.0), (0.5 + burst.intensity * 0.4) * 3)
+			var alpha: float = clampf(burst.life / 8.0, 0, 1)
+			var intensity: int = burst.intensity
+			var pts := _build_arc_path(burst.a, burst.b, intensity, burst.get("phase", 0.0))
+			# Two-layer bolt (JS): wide soft glow halo, then a bright sharp core.
+			draw_polyline(pts, Color(0.486, 0.843, 1.0, 0.18 * alpha),
+					1.2 + intensity * 0.7)
+			draw_polyline(pts, Color(0.776, 0.965, 1.0, 0.95 * alpha),
+					0.8 + intensity * 0.35)
+
+	## JS traceElectricArcPath: a multi-segment bolt jittered by a sine phase and
+	## a zig-zag, tapered to zero at both endpoints by a sin envelope.
+	func _build_arc_path(a: Vector2, b: Vector2, intensity: int, phase: float) \
+			-> PackedVector2Array:
+		const SEGMENTS := 7
+		var dir := b - a
+		var len := maxf(1.0, dir.length())
+		var normal := Vector2(-dir.y, dir.x) / len
+		var amp_base := 2.2 + intensity * 0.7
+		var ph := State.frame_count * 0.55 + phase
+		var ph73 := ph * 0.73
+		var pts := PackedVector2Array([a])
+		for i in range(1, SEGMENTS):
+			var ti := float(i) / SEGMENTS
+			var base := a + dir * ti
+			var envelope := sin(ti * PI)
+			var zig := 1.0 if i % 2 == 0 else -1.0
+			var jitter := sin(ph + i * 1.7) * 0.85 + cos(ph73 + i * 2.3) * 0.55
+			var offset := (zig * amp_base + jitter * amp_base * 0.65) * envelope
+			pts.append(base + normal * offset)
+		pts.append(b)
+		return pts
 
 	func _draw_particles() -> void:
 		for p in world.particles:
@@ -316,12 +376,43 @@ class DynamicLayer extends Node2D:
 			draw_rect(Rect2(p.pos, Vector2(3, 3)), c)
 
 	func _draw_lights() -> void:
+		# Soft radial glow stamped from the cached gradient sprite (JS drawImage
+		# of LIGHT_GRADIENT_CACHE), modulated by the light colour and life — a
+		# punchy flash instead of the old flat hard-edged discs.
+		const ALPHA_SCALE := 0.55
 		for l in world.lights:
 			var c: Color = l.color
-			c.a = 0.3 * clampf(l.life, 0, 1)
-			draw_circle(l.pos, l.radius * 0.5, c)
-			c.a *= 0.4
-			draw_circle(l.pos, l.radius, c)
+			c.a = clampf(l.life, 0, 1) * ALPHA_SCALE
+			var r: float = l.radius
+			draw_texture_rect(_light_tex, Rect2(l.pos - Vector2(r, r),
+					Vector2(r * 2, r * 2)), false, c)
+
+	func _draw_arc_tower_links() -> void:
+		for link in world.arc_tower_links:
+			var pa: Vector2 = link.a.pos
+			var pb: Vector2 = link.b.pos
+			var lvl := clampi(int(link.strength), 1, C.ARC_MAX_BONUS)
+			if lvl < C.ARC_MAX_BONUS:
+				var s: Dictionary = _LINK_STYLES[lvl - 1]
+				_draw_dashed_line(pa, pb, s.on, s.off, s.color, s.w)
+			else:
+				# Level 5: solid neon — wide diffuse halo, then bright thin core.
+				draw_line(pa, pb, Color(0.471, 0.824, 1.0, 0.28), 10.0)
+				draw_line(pa, pb, Color(0.784, 0.961, 1.0, 0.94), 2.4)
+
+	func _draw_dashed_line(a: Vector2, b: Vector2, on: float, off: float,
+			color: Color, width: float) -> void:
+		var seg := b - a
+		var seg_len := seg.length()
+		if seg_len < 0.001:
+			return
+		var dir := seg / seg_len
+		var step := on + off
+		var d := 0.0
+		while d < seg_len:
+			var e := minf(d + on, seg_len)
+			draw_line(a + dir * d, a + dir * e, color, width)
+			d += step
 
 	func _draw_targeting_overlay() -> void:
 		if world.targeting_ability == &"":

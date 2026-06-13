@@ -756,7 +756,11 @@ class RiftGenerator {
       pathZones: [for (final path in existingPaths) path.zone],
       wave: wave,
       initial: existingPaths.isEmpty,
-      seed: _rng.nextInt(1 << 32),
+      // NOTE: must stay <= 2^31-1. On the web/JS target bitwise shifts are
+      // 32-bit, so `1 << 32` overflows to 0 and `nextInt(0)` throws a
+      // RangeError — which silently aborted rift generation (no enemies ever
+      // spawned). `0x7FFFFFFF` is a portable positive max across web and VM.
+      seed: _rng.nextInt(0x7FFFFFFF),
     );
 
     // compute() = isolate on mobile, sync on web (both compile correctly)

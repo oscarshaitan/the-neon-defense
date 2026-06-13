@@ -152,6 +152,30 @@ void main() {
         expect(tester.takeException(), isNull);
         await cleanup(tester);
       });
+
+      // Regression: a 32-bit shift overflow in the rift seed made
+      // generateRift throw on the web target, silently producing a wave with
+      // zero rifts (and therefore zero enemies). Prep must end with at least
+      // one rift so spawning can happen. See rift_generator.dart seed bound.
+      testWidgets('prep phase generates rifts so enemies can spawn',
+          (tester) async {
+        final game = await pumpGame(tester, size);
+        game.startGame();
+        game.tutorial.skip();
+        // generateRift runs via compute() (async); service real-async windows
+        // until rifts appear, bounded so a regression fails fast.
+        var hasRift = false;
+        for (var i = 0; i < 200 && !hasRift; i++) {
+          await tester.runAsync(
+              () => Future<void>.delayed(const Duration(milliseconds: 5)));
+          await tester.pump(const Duration(milliseconds: 16));
+          hasRift = game.gameWorld.waveSystem.rifts.isNotEmpty;
+        }
+        expect(hasRift, isTrue,
+            reason: 'prep phase produced no rifts — enemies cannot spawn');
+        expect(tester.takeException(), isNull);
+        await cleanup(tester);
+      });
     });
   }
 }
