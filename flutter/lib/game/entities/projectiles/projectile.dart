@@ -5,6 +5,10 @@ import '../../neon_defense_game.dart';
 import '../../world/game_world.dart' show RenderLayers;
 import '../enemies/enemy.dart';
 
+// Shared per-color paint cache — allocating a Paint per projectile per frame
+// is pure GC churn under heavy fire (towers fire every few frames).
+final Map<int, Paint> _projectilePaintCache = {};
+
 class Projectile extends PositionComponent
     with HasGameReference<NeonDefenseGame> {
   final Enemy target;
@@ -63,7 +67,8 @@ class Projectile extends PositionComponent
     canvas.drawCircle(
       Offset.zero,
       2,
-      Paint()..color = color,
+      _projectilePaintCache.putIfAbsent(
+          color.toARGB32(), () => Paint()..color = color),
     );
   }
 }
