@@ -80,7 +80,6 @@ class StaticWorldLayer extends Node2D:
 ## Everything that moves — redrawn each frame in the JS draw() order.
 class DynamicLayer extends Node2D:
 	var world: World
-	var _rng := RandomNumberGenerator.new()
 	# Cached soft radial-gradient sprite for muzzle flashes / dynamic lights —
 	# the Godot analogue of the JS LIGHT_GRADIENT_CACHE (white core → transparent
 	# edge), drawn modulated per light. One texture, reused for every flash.
@@ -113,6 +112,8 @@ class DynamicLayer extends Node2D:
 
 	func _draw() -> void:
 		var frame := State.frame_count
+		if world.show_no_build_overlay:
+			_draw_no_build_overlay()
 		_draw_spawn_discs(frame)
 		_draw_base(frame)
 		_draw_build_target(frame)
@@ -124,6 +125,24 @@ class DynamicLayer extends Node2D:
 		_draw_particles()
 		_draw_lights()
 		_draw_targeting_overlay()
+
+	## JS spatial-zoning debug overlay: zone-0 no-rift disc, concentric zone
+	## rings (every 3 cells), and the wide no-build buffer along each rift.
+	func _draw_no_build_overlay() -> void:
+		var center := world.core_pos
+		var zone0 := C.ZONE0_RADIUS_CELLS * C.GRID_SIZE
+		draw_circle(center, zone0, Color(1, 0, 0, 0.05))
+		draw_arc(center, zone0, 0, TAU, 64, Color(1, 0, 0, 0.4), 2.0)
+		var r := C.ZONE0_RADIUS_CELLS + 3
+		while r < 60:
+			draw_arc(center, r * C.GRID_SIZE, 0, TAU, 64, Color(C.COL_BLUE, 0.2), 2.0)
+			r += 3
+		# No-build buffers (~1.5 cells each side) along every rift.
+		var buffer := C.GRID_SIZE * 1.5
+		for rift in world.rifts:
+			var points: PackedVector2Array = rift.points
+			if points.size() >= 2:
+				draw_polyline(points, Color(1, 0, 0, 0.3), buffer * 2.0)
 
 	func _draw_spawn_discs(frame: int) -> void:
 		var pulse := 1.0 + sin(frame * 0.1) * 0.2

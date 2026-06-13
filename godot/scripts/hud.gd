@@ -32,8 +32,15 @@ var _tower_buttons := {}
 var _wave_intel_open := false
 var _toast_timer: SceneTreeTimer
 
+# Command center (JS debug panel): SHA-256-gated developer tools. The hash is
+# the SHA-256 of the access code (matches the JS gate in 00_core.js).
+const _DEBUG_HASH := "73ceb15f18bb0a313c8880abe54bf61a529dd8f1e75b084dd39926a1518d3d2f"
+const _DEBUG_UNLOCK_PATH := "user://debug_unlocked.cfg"
+var _debug_unlocked := false
+
 func _ready() -> void:
 	layer = 10
+	_debug_unlocked = FileAccess.file_exists(_DEBUG_UNLOCK_PATH)
 	_build_start_screen()
 	_build_hud()
 	_build_pause_menu()
@@ -84,7 +91,8 @@ func _button(text: String, color: Color, on_pressed: Callable) -> Button:
 	hover.bg_color = Color(color, 0.15)
 	b.add_theme_stylebox_override(&"hover", hover)
 	b.add_theme_stylebox_override(&"pressed", hover)
-	b.pressed.connect(on_pressed)
+	if on_pressed.is_valid():
+		b.pressed.connect(on_pressed)
 	return b
 
 func _panel(border: Color) -> PanelContainer:
@@ -500,6 +508,62 @@ func refresh_pause_menu() -> void:
 		world.auto_quality = true
 		State.show_toast("DETAILS: AUTO")
 		refresh_pause_menu()))
+	_build_command_center(col)
+
+# ---------------------------------------------------------------------------
+# Command center (JS debug panel) — SHA-256-gated developer tools
+# ---------------------------------------------------------------------------
+
+func _build_command_center(col: VBoxContainer) -> void:
+	if not _debug_unlocked:
+		col.add_child(_label("COMMAND CENTER", 9, Color(C.COL_PINK, 0.5)))
+		var pass_field := LineEdit.new()
+		pass_field.secret = true
+		pass_field.placeholder_text = "ACCESS CODE"
+		pass_field.custom_minimum_size = Vector2(180, 24)
+		col.add_child(pass_field)
+		var unlock_btn := _button("UNLOCK COMMAND CENTER", C.COL_PINK, Callable())
+		unlock_btn.pressed.connect(func(): _attempt_debug_unlock(pass_field, unlock_btn))
+		pass_field.text_submitted.connect(func(_t): _attempt_debug_unlock(pass_field, unlock_btn))
+		col.add_child(unlock_btn)
+		return
+
+	col.add_child(_label("COMMAND CENTER", 9, C.COL_PINK))
+	col.add_child(_button("+1M CREDITS", C.COL_YELLOW, world.debug_add_money))
+	var rift_row := HBoxContainer.new()
+	rift_row.add_theme_constant_override(&"separation", 6)
+	col.add_child(rift_row)
+	rift_row.add_child(_button("NEW RIFT", C.COL_BLUE, world.debug_create_rift))
+	rift_row.add_child(_button("LEVEL UP RIFT", C.COL_BLUE, world.debug_level_up_rift))
+	var wave_row := HBoxContainer.new()
+	wave_row.add_theme_constant_override(&"separation", 6)
+	col.add_child(wave_row)
+	wave_row.add_child(_button("+1 WAVE", C.COL_GREEN, func(): world.debug_increase_wave(1, true)))
+	wave_row.add_child(_button("+5 WAVES", C.COL_GREEN, func(): world.debug_increase_wave(5, true)))
+	wave_row.add_child(_button("+10 WAVES", C.COL_GREEN, func(): world.debug_increase_wave(10, true)))
+	col.add_child(_button("REBUILD RIFTS", C.COL_BLUE, world.debug_rebuild_rifts))
+	col.add_child(_button("TOGGLE OVERLAY", C.COL_PINK, world.toggle_no_build_overlay))
+	var spawn_grid := GridContainer.new()
+	spawn_grid.columns = 4
+	spawn_grid.add_theme_constant_override(&"h_separation", 4)
+	spawn_grid.add_theme_constant_override(&"v_separation", 4)
+	col.add_child(spawn_grid)
+	for type in [&"basic", &"fast", &"tank", &"splitter", &"bulwark", &"shifter", &"boss"]:
+		spawn_grid.add_child(_button(String(type).to_upper(), C.COL_RED,
+				func(): world.debug_spawn(type)))
+
+## JS unlockDebug: SHA-256 the entered code; unlock + persist on match, else
+## flash "ACCESS DENIED" for one second.
+func _attempt_debug_unlock(field: LineEdit, btn: Button) -> void:
+	if field.text.sha256_text() == _DEBUG_HASH:
+		_debug_unlocked = true
+		FileAccess.open(_DEBUG_UNLOCK_PATH, FileAccess.WRITE) # persist unlock marker
+		refresh_pause_menu()
+	else:
+		btn.text = "ACCESS DENIED"
+		get_tree().create_timer(1.0).timeout.connect(func():
+			if is_instance_valid(btn):
+				btn.text = "UNLOCK COMMAND CENTER")
 
 # ---------------------------------------------------------------------------
 # Tutorial / toast

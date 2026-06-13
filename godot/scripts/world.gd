@@ -85,6 +85,9 @@ var base_cooldown := 0
 # --- Abilities ---
 var targeting_ability: StringName = &""
 
+# --- Debug / command center (JS showNoBuildOverlay) ---
+var show_no_build_overlay := false
+
 # --- Spatial hash ---
 var _grid := {}
 var _taunter_grid := {}
@@ -959,5 +962,113 @@ func reset() -> void:
 	base_cooldown = 0
 	is_prep_phase = false
 	targeting_ability = &""
+	show_no_build_overlay = false
 	rifts_changed.emit()
 	hardpoints_changed.emit()
+
+# ---------------------------------------------------------------------------
+# Debug / command center (JS debug functions in 00_core.js + 05_loop.js)
+# ---------------------------------------------------------------------------
+
+func debug_add_money() -> void:
+	State.money += 1000000
+	save_system.save_now()
+
+## JS debugSpawn: spawn one enemy of a specific type on a random rift.
+func debug_spawn(type: StringName) -> void:
+	if rifts.is_empty():
+		return
+	var def := C.enemy_def(type)
+	var rift: Dictionary = rifts[rng.randi_range(0, rifts.size() - 1)]
+	var e := Enemy.new()
+	e.type = type
+	e.hp = def.hp * (1.0 + State.wave * 0.4)
+	if rift.level > 1:
+		e.hp *= 1.0 + (rift.level - 1) * 0.5
+	e.max_hp = e.hp
+	e.speed = def.speed
+	e.reward = def.reward
+	e.color = def.color
+	e.width = def.width
+	e.rift_level = rift.level
+	e.path = rift.points
+	e.pos = rift.points[0]
+	_grid_insert(e)
+	enemies.append(e)
+	State.is_wave_active = true # ensure systems process it
+
+## JS debugCreateRift: force-generate one extra rift.
+func debug_create_rift() -> void:
+	var hp_cells := hardpoint_cells()
+	var core_slots: Array = []
+	for hp in hardpoints:
+		if hp.type == &"core":
+			core_slots.append(hp.cell)
+	var result: Dictionary
+	if rifts.is_empty():
+		result = Pathfinding.generate_initial_rift(C.WORLD_COLS, C.WORLD_ROWS, core_cell, hp_cells, rng)
+	else:
+		result = Pathfinding.generate_new_rift(C.WORLD_COLS, C.WORLD_ROWS, core_cell,
+				hp_cells, core_slots, rifts, State.wave, rng)
+	if result.is_empty():
+		return
+	var points := PackedVector2Array()
+	for cell in result.cells:
+		points.append((Vector2(cell) + Vector2(0.5, 0.5)) * C.GRID_SIZE)
+	rifts.append({cells = result.cells, points = points, level = 1, zone = result.zone, mutation = {}})
+	_destroy_towers_on_path(points)
+	rifts_changed.emit()
+	AudioEngine.play_sfx(&"build")
+
+## JS debugLevelUpRift: bump a random rift's tier with a flash.
+func debug_level_up_rift() -> void:
+	if rifts.is_empty():
+		return
+	var rift: Dictionary = rifts[rng.randi_range(0, rifts.size() - 1)]
+	rift.level += 1
+	if not rift.points.is_empty():
+		var start: Vector2 = rift.points[0]
+		create_particles(start, C.COL_PINK, 30)
+		add_light(start, 200.0, C.COL_PINK)
+	rifts_changed.emit()
+	AudioEngine.play_sfx(&"build")
+
+## JS debugIncreaseWave: jump N waves, simulating skipped wave-starts so
+## progression pacing (rift evolution, mutation rolls) matches normal play.
+func debug_increase_wave(steps: int, auto_start: bool) -> void:
+	var count := maxi(1, steps)
+	_clear_combat_state()
+	for i in count:
+		State.wave += 1
+		start_prep_phase()
+		if i < count - 1:
+			_start_wave() # resolve skipped wave instantly
+			_clear_combat_state()
+	if auto_start:
+		_start_wave()
+	save_system.save_now()
+
+## JS debugRebuildRiftsByWave: wipe rifts and regenerate baseline topology.
+func debug_rebuild_rifts() -> void:
+	_clear_combat_state()
+	State.select_rift(null)
+	rifts.clear()
+	start_prep_phase() # regenerates initial + missing rifts for the wave
+	AudioEngine.play_sfx(&"build")
+	save_system.save_now()
+
+## JS toggleNoBuildOverlay: show/hide the spatial-zoning debug overlay.
+func toggle_no_build_overlay() -> void:
+	show_no_build_overlay = not show_no_build_overlay
+
+func _clear_combat_state() -> void:
+	enemies.clear()
+	projectiles.clear()
+	particles.clear()
+	arc_bursts.clear()
+	arc_tower_links.clear()
+	_arc_network_dirty = true
+	spawn_queue.clear()
+	_grid.clear()
+	_taunter_grid.clear()
+	State.is_wave_active = false
