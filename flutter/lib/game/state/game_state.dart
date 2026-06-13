@@ -48,6 +48,9 @@ class GameState {
   /// Wave Intelligence panel visibility (JS toggleWavePanel).
   final ValueNotifier<bool> waveIntelOpen = ValueNotifier(false);
 
+  /// Command-center spatial-zoning debug overlay (JS showNoBuildOverlay).
+  final ValueNotifier<bool> noBuildOverlay = ValueNotifier(false);
+
   void startShake(double amount) {
     if (amount > shakeAmount) shakeAmount = amount;
   }
@@ -74,5 +77,6 @@ class GameState {
     totalKills.clear();
     frameCount = 0;
     shakeAmount = 0;
+    noBuildOverlay.value = false;
   }
 }

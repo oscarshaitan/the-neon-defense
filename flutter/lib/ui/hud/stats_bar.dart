@@ -10,6 +10,9 @@ class StatsBar extends StatelessWidget {
     final ws = game.gameWorld.waveSystem;
     final state = game.state;
     final remaining = game.entities.enemies.length;
+    // The FPS readout is dropped on narrow (phone-landscape) widths so the
+    // top bar never overflows; there's room for it on tablet/desktop.
+    final showFps = MediaQuery.of(context).size.width >= 760;
 
     return SafeArea(
       child: Column(
@@ -53,6 +56,11 @@ class StatsBar extends StatelessWidget {
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   _stat('CREDITS', '${state.money.value.toInt()}',
                       color: const Color(0xFFFCEE0A)),
+                  if (showFps) ...[
+                    const SizedBox(width: 12),
+                    _stat('FPS', '${game.fps.round()}',
+                        color: const Color(0xB300F3FF)),
+                  ],
                   const SizedBox(width: 12),
                   _pauseBtn(context),
                 ]),

@@ -38,6 +38,7 @@ dependencies:
   flame_audio: ^2.11.14
   shared_preferences: ^2.5.4
   google_fonts: ^8.0.2
+  crypto: ^3.0.6 # SHA-256 for the command-center access gate
 
 dev_dependencies:
   flutter_test:

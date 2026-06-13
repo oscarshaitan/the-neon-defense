@@ -7,6 +7,7 @@ import '../config/constants.dart';
 import 'tile_grid.dart';
 import 'hardpoint_manager.dart';
 import 'rift_path_renderer.dart';
+import 'no_build_overlay.dart';
 import '../systems/pathfinding/rift_generator.dart';
 import '../systems/wave_system.dart';
 import '../systems/spatial_grid.dart';
@@ -28,6 +29,7 @@ import '../entities/base/core_base.dart';
 /// ability overlays -> lights. Entities set their own priority from these.
 class RenderLayers {
   static const int grid = 0;
+  static const int noBuildOverlay = 4; // under rifts (JS draws it pre-rift loop)
   static const int riftPaths = 5;
   static const int base = 10;
   static const int hardpoints = 15;
@@ -87,6 +89,8 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
 
     await addAll([
       tileGrid,
+      NoBuildOverlay(waveSystem, coreBase)
+        ..priority = RenderLayers.noBuildOverlay,
       RiftPathRenderer(waveSystem)..priority = RenderLayers.riftPaths,
       hardpointManager,
       coreBase,
@@ -188,6 +192,84 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
       game.selection.selectTower(null);
     }
     t.removeFromParent();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Debug / command center (JS debug functions; parity with the Godot edition)
+  // ---------------------------------------------------------------------------
+
+  void debugAddMoney() {
+    game.state.money.value += 1000000;
+    game.saveSystem.save();
+  }
+
+  /// JS debugSpawn: spawn one enemy of a specific type on a random rift.
+  void debugSpawn(EnemyType type) {
+    final rifts = waveSystem.rifts;
+    if (rifts.isEmpty) return;
+    final rift = rifts[waveSystem.rng.nextInt(rifts.length)];
+    final def = kEnemies[type]!;
+    var hp = def.hp * (1.0 + game.state.wave.value * 0.4);
+    if (rift.level > 1) hp *= 1 + (rift.level - 1) * 0.5;
+    add(Enemy(
+      type: type,
+      hp: hp,
+      speed: def.speed,
+      color: def.color,
+      reward: def.reward,
+      width: def.width,
+      path: rift.points,
+      riftLevel: rift.level,
+      spatialGrid: spatialGrid,
+    ));
+    game.state.isWaveActive.value = true; // ensure systems process it
+  }
+
+  /// JS debugCreateRift: force-generate one extra rift (async in Flutter).
+  Future<void> debugCreateRift() async {
+    final rift = await riftGenerator.generateRift(
+      existingPaths: waveSystem.rifts,
+      wave: game.state.wave.value,
+    );
+    if (rift == null) return;
+    waveSystem.rifts.add(rift);
+    destroyTowersOnPath(rift.points);
+    game.audio.playBuild();
+  }
+
+  /// JS debugLevelUpRift: bump a random rift's tier with a flash.
+  void debugLevelUpRift() {
+    final rifts = waveSystem.rifts;
+    if (rifts.isEmpty) return;
+    final rift = rifts[waveSystem.rng.nextInt(rifts.length)];
+    rift.level++;
+    if (rift.points.isNotEmpty) {
+      final s = rift.points.first;
+      particles.createParticles(s.x, s.y, const Color(0xFFFF00AC), 30);
+      lights.emit(x: s.x, y: s.y, radius: 200, color: const Color(0xFFFF00AC));
+    }
+    game.audio.playBuild();
+  }
+
+  /// JS debugUpgradeAllTowers: add N upgrade levels to every tower for free.
+  /// Reuses Tower.upgrade() (which clamps range to kMaxTowerRange and does not
+  /// touch money), so range stays capped — never infinite.
+  void debugUpgradeAllTowers(int levels) {
+    for (final t in game.entities.towers) {
+      for (var i = 0; i < levels; i++) {
+        t.upgrade();
+      }
+      particles.createParticles(
+          t.position.x, t.position.y, const Color(0xFF00FF41), 8);
+    }
+    // Re-select the current tower so the selection panel shows new stats.
+    final sel = game.selection.selectedTower;
+    if (sel != null) game.selection.selectTower(sel);
+    game.saveSystem.save();
+  }
+
+  void toggleNoBuildOverlay() {
+    game.state.noBuildOverlay.value = !game.state.noBuildOverlay.value;
   }
 
   /// Must only be called while gameplay is halted (game over, pause-menu
