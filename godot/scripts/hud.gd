@@ -434,6 +434,29 @@ func _refresh_wave_intel() -> void:
 	col.add_child(_label(dist_text, 9, Color.WHITE))
 
 # ---------------------------------------------------------------------------
+# Input guard
+# ---------------------------------------------------------------------------
+
+## True if a screen-space tap lands on a visible, input-consuming HUD control
+## (panel, button, label). main.gd uses this so a tap on the selection panel
+## never falls through to the world handler and closes the menu.
+func blocks_world_tap(screen_pos: Vector2) -> bool:
+	if _pause_menu.visible and _pause_menu.get_global_rect().has_point(screen_pos):
+		return true
+	return _control_blocks(_hud_root, screen_pos)
+
+func _control_blocks(node: Node, screen_pos: Vector2) -> bool:
+	if node is Control:
+		var c := node as Control
+		if c.visible and c.mouse_filter == Control.MOUSE_FILTER_STOP \
+				and c.get_global_rect().has_point(screen_pos):
+			return true
+	for child in node.get_children():
+		if _control_blocks(child, screen_pos):
+			return true
+	return false
+
+# ---------------------------------------------------------------------------
 # Pause menu
 # ---------------------------------------------------------------------------
 

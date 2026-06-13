@@ -28,4 +28,8 @@ renderer/rendering_method.mobile="gl_compatibility"
 
 [input_devices]
 
-pointing/emulate_touch_from_mouse=true
+# Touch taps emulate mouse so GUI buttons work on mobile/web; the reverse
+# (mouse->touch) is left off — with both on, a single tap produced duplicate
+# events that could leak past a button to the world tap handler.
+pointing/emulate_mouse_from_touch=true
+pointing/emulate_touch_from_mouse=false

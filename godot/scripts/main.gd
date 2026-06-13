@@ -82,7 +82,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				_drag_start = event.position
 			else:
 				_dragging = false
-				if not _drag_moved:
+				# Guard: a tap on a visible HUD control must never fall through
+				# to the world handler (which would deselect and close the panel).
+				# GUI normally consumes it; belt-and-suspenders for touch quirks.
+				if not _drag_moved and not hud.blocks_world_tap(event.position):
 					_handle_tap(get_global_mouse_position())
 	elif event is InputEventMouseMotion and _dragging:
 		if event.position.distance_to(_drag_start) > 8.0: # JS drag threshold
@@ -145,6 +148,8 @@ func _handle_key(keycode: Key) -> void:
 		KEY_2: world.start_targeting(&"overclock")
 		KEY_U: world.upgrade_selected()
 		KEY_DELETE, KEY_BACKSPACE: world.sell_selected()
+		KEY_F: world.repair_base()
+		KEY_G: world.upgrade_base() # install / upgrade base turret
 		KEY_P: toggle_pause()
 		KEY_ESCAPE: handle_escape()
 
