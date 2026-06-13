@@ -82,7 +82,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				_drag_start = event.position
 			else:
 				_dragging = false
-				if not _drag_moved:
+				# Guard: a tap on a visible HUD control must never fall through
+				# to the world handler (which would deselect and close the panel).
+				# GUI normally consumes it; belt-and-suspenders for touch quirks.
+				if not _drag_moved and not hud.blocks_world_tap(event.position):
 					_handle_tap(get_global_mouse_position())
 	elif event is InputEventMouseMotion and _dragging:
 		if event.position.distance_to(_drag_start) > 8.0: # JS drag threshold
@@ -91,8 +94,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			camera.position -= event.relative / camera.zoom.x
 	elif event is InputEventMagnifyGesture:
 		_zoom_at(event.factor, get_viewport().get_visible_rect().size / 2.0)
-	elif event is InputEventKey and event.pressed and not event.echo:
-		_handle_key(event.keycode)
+	elif event is InputEventKey and event.pressed:
+		# Allow OS key-repeat (echo) for the buy/upgrade keys so holding them
+		# keeps purchasing; other keys fire once per press.
+		if not event.echo or event.keycode in [KEY_U, KEY_F, KEY_G]:
+			_handle_key(event.keycode)
 
 func _zoom_at(factor: float, _screen_pos: Vector2) -> void:
 	var z := clampf(camera.zoom.x * factor, 0.1, 1.0)
@@ -145,6 +151,8 @@ func _handle_key(keycode: Key) -> void:
 		KEY_2: world.start_targeting(&"overclock")
 		KEY_U: world.upgrade_selected()
 		KEY_DELETE, KEY_BACKSPACE: world.sell_selected()
+		KEY_F: world.repair_base()
+		KEY_G: world.upgrade_base() # install / upgrade base turret
 		KEY_P: toggle_pause()
 		KEY_ESCAPE: handle_escape()
 

@@ -26,6 +26,7 @@ var _wave_label: Label
 var _lives_label: Label
 var _credits_label: Label
 var _center_label: Label
+var _fps_label: Label
 var _energy_bar: ProgressBar
 var _tower_buttons := {}
 
@@ -219,6 +220,8 @@ func _build_hud() -> void:
 	row.add_child(spacer2)
 	_credits_label = _label("CREDITS: 100", 12, C.COL_YELLOW)
 	row.add_child(_credits_label)
+	_fps_label = _label("FPS: --", 11, Color(C.COL_BLUE, 0.7))
+	row.add_child(_fps_label)
 	row.add_child(_button("II", C.COL_BLUE, main.toggle_pause))
 
 	# --- START WAVE ---
@@ -324,6 +327,7 @@ func _refresh_stats() -> void:
 	_wave_label.text = "WAVE: %d" % State.wave
 	_lives_label.text = "LIVES: %d" % State.lives
 	_credits_label.text = "CREDITS: %d" % int(State.money)
+	_fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
 	if world.is_prep_phase:
 		_center_label.text = "NEXT WAVE: %ds" % ceili(world.prep_timer)
 		_center_label.add_theme_color_override(&"font_color", C.COL_GREEN)
@@ -434,6 +438,29 @@ func _refresh_wave_intel() -> void:
 	col.add_child(_label(dist_text, 9, Color.WHITE))
 
 # ---------------------------------------------------------------------------
+# Input guard
+# ---------------------------------------------------------------------------
+
+## True if a screen-space tap lands on a visible, input-consuming HUD control
+## (panel, button, label). main.gd uses this so a tap on the selection panel
+## never falls through to the world handler and closes the menu.
+func blocks_world_tap(screen_pos: Vector2) -> bool:
+	if _pause_menu.visible and _pause_menu.get_global_rect().has_point(screen_pos):
+		return true
+	return _control_blocks(_hud_root, screen_pos)
+
+func _control_blocks(node: Node, screen_pos: Vector2) -> bool:
+	if node is Control:
+		var c := node as Control
+		if c.visible and c.mouse_filter == Control.MOUSE_FILTER_STOP \
+				and c.get_global_rect().has_point(screen_pos):
+			return true
+	for child in node.get_children():
+		if _control_blocks(child, screen_pos):
+			return true
+	return false
+
+# ---------------------------------------------------------------------------
 # Pause menu
 # ---------------------------------------------------------------------------
 
@@ -541,6 +568,12 @@ func _build_command_center(col: VBoxContainer) -> void:
 	wave_row.add_child(_button("+1 WAVE", C.COL_GREEN, func(): world.debug_increase_wave(1, true)))
 	wave_row.add_child(_button("+5 WAVES", C.COL_GREEN, func(): world.debug_increase_wave(5, true)))
 	wave_row.add_child(_button("+10 WAVES", C.COL_GREEN, func(): world.debug_increase_wave(10, true)))
+	var lvl_row := HBoxContainer.new()
+	lvl_row.add_theme_constant_override(&"separation", 6)
+	col.add_child(lvl_row)
+	lvl_row.add_child(_button("+5 LVL", C.COL_YELLOW, func(): world.debug_upgrade_all_towers(5)))
+	lvl_row.add_child(_button("+10 LVL", C.COL_YELLOW, func(): world.debug_upgrade_all_towers(10)))
+	lvl_row.add_child(_button("+25 LVL", C.COL_YELLOW, func(): world.debug_upgrade_all_towers(25)))
 	col.add_child(_button("REBUILD RIFTS", C.COL_BLUE, world.debug_rebuild_rifts))
 	col.add_child(_button("TOGGLE OVERLAY", C.COL_PINK, world.toggle_no_build_overlay))
 	var spawn_grid := GridContainer.new()

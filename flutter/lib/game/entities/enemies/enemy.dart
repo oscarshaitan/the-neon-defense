@@ -250,6 +250,11 @@ class Enemy extends PositionComponent
 
   @override
   void render(Canvas canvas) {
+    // Flame's render origin is the component's top-left; the body is authored
+    // around (0,0) = center, so shift to the box centre — otherwise the enemy
+    // draws half its width up-left of where it actually walks on the rift.
+    canvas.translate(size.x / 2, size.y / 2);
+
     final halfW = width / 2;
     final frameCount = game.state.frameCount;
 

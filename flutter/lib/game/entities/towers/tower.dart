@@ -162,6 +162,13 @@ class Tower extends PositionComponent
 
   @override
   void render(Canvas canvas) {
+    // Flame's render canvas origin is the component's top-left, not its
+    // center, even with Anchor.center. All shapes below are authored around
+    // (0,0) = center (matching the JS draw functions), so shift the origin to
+    // the box centre — otherwise towers draw half a cell up-left, landing on
+    // the grid intersection instead of inside the cell.
+    canvas.translate(size.x / 2, size.y / 2);
+
     final frameCount = game.state.frameCount;
 
     // JS tower silhouettes at exact sizes (drawTowerOne).

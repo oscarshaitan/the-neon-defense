@@ -1057,6 +1057,20 @@ func debug_rebuild_rifts() -> void:
 	AudioEngine.play_sfx(&"build")
 	save_system.save_now()
 
+## Debug: add N upgrade levels to every tower for free (same per-level stat
+## math as upgrade_selected, so range stays clamped to MAX_TOWER_RANGE — it is
+## NOT infinite, matching the JS cap).
+func debug_upgrade_all_towers(levels: int) -> void:
+	for t in towers:
+		for _i in levels:
+			t.total_cost += upgrade_cost(t) # cost at the pre-increment level
+			t.level += 1
+			t.damage *= 1.2
+			t.range = minf(t.range * 1.1, C.MAX_TOWER_RANGE)
+		create_particles(t.pos, C.COL_GREEN, 8)
+	State.selection_changed.emit() # refresh the selection panel if open
+	save_system.save_now()
+
 ## JS toggleNoBuildOverlay: show/hide the spatial-zoning debug overlay.
 func toggle_no_build_overlay() -> void:
 	show_no_build_overlay = not show_no_build_overlay

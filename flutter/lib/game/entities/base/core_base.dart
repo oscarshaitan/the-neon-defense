@@ -127,6 +127,10 @@ class CoreBase extends PositionComponent
 
   @override
   void render(Canvas canvas) {
+    // Flame's render origin is the component's top-left; everything below is
+    // authored around (0,0) = center, so shift to the box centre.
+    canvas.translate(size.x / 2, size.y / 2);
+
     // Selection ring + range indicator (JS 06_render.js:260-279).
     if (game.selection.selectedBase) {
       drawDashedCircle(

@@ -31,6 +31,10 @@ class NeonDefenseGame extends FlameGame
   final SelectionState selection = SelectionState();
   final EntityRegistry entities = EntityRegistry();
 
+  /// Smoothed frames-per-second for the HUD counter (EMA of 1/dt), matching
+  /// the JS HUD's fps-display and the Godot FPS readout.
+  double fps = 0;
+
   // JS playShootSFX throttle (05_loop.js:691-700): min interval by quality.
   int _lastShootSfxFrame = -1000000;
 
@@ -75,6 +79,11 @@ class NeonDefenseGame extends FlameGame
 
   @override
   void update(double dt) {
+    if (dt > 0) {
+      final inst = 1 / dt;
+      fps = fps == 0 ? inst : fps * 0.9 + inst * 0.1;
+    }
+
     if (state.isPlaying) {
       gameWorld.qualityGovernor.recordFrameMs(dt * 1000);
     }

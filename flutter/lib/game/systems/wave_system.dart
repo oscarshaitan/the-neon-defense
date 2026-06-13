@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../config/constants.dart';
 import '../world/game_world.dart';
 import '../entities/enemies/enemy.dart';
+import '../entities/projectiles/projectile.dart';
 import 'pathfinding/rift_generator.dart';
 
 class WaveSystem extends Component with HasGameReference {
@@ -277,5 +278,58 @@ Future<void> _generateMissingRifts() async {
       debugPrint('Rift generation failed: $e\n$st');
       assert(false, 'Rift generation failed: $e');
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Debug / command center (JS debugIncreaseWave / debugRebuildRiftsByWave)
+  // ---------------------------------------------------------------------------
+
+  /// Remove active combat (enemies, projectiles, spawn queue) without touching
+  /// towers or rifts. Clears synchronously like GameWorld.reset(); the
+  /// command center runs while paused so no wave-end check sees the gap.
+  void _clearCombat() {
+    final g = gameWorld.game;
+    gameWorld.removeWhere((c) => c is Enemy || c is Projectile);
+    g.entities.enemies.clear();
+    g.entities.projectiles.clear();
+    gameWorld.spatialGrid.clear();
+    spawnQueue.clear();
+    spawnTimer = 0;
+    g.state.isWaveActive.value = false;
+  }
+
+  /// JS debugIncreaseWave: jump N waves, simulating skipped wave-starts so
+  /// progression pacing (rift evolution, mutation rolls) matches normal play.
+  /// Awaits rift generation between steps (Flutter rifts are async, unlike the
+  /// synchronous JS/Godot models).
+  Future<void> debugIncreaseWave(int steps, {bool autoStart = true}) async {
+    final g = gameWorld.game;
+    final count = steps < 1 ? 1 : steps;
+    _clearCombat();
+    for (var i = 0; i < count; i++) {
+      g.state.wave.value++;
+      isPrepPhase = true;
+      prepTimer = kPrepTimerSeconds.toDouble();
+      await _generateMissingRifts();
+      if (i < count - 1) {
+        _startWave(); // resolve the skipped wave instantly
+        _clearCombat();
+      }
+    }
+    if (autoStart) _startWave();
+    g.saveSystem.save();
+  }
+
+  /// JS debugRebuildRiftsByWave: wipe rifts and regenerate baseline topology.
+  Future<void> debugRebuildRifts() async {
+    final g = gameWorld.game;
+    g.selection.clear();
+    _clearCombat();
+    rifts.clear();
+    isPrepPhase = true;
+    prepTimer = kPrepTimerSeconds.toDouble();
+    await _generateMissingRifts();
+    g.audio.playBuild();
+    g.saveSystem.save();
   }
 }

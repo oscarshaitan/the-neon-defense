@@ -1,4 +1,9 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../game/config/constants.dart';
 import '../../game/neon_defense_game.dart';
 
@@ -12,6 +17,49 @@ class PauseMenu extends StatefulWidget {
 
 class _PauseMenuState extends State<PauseMenu> {
   NeonDefenseGame get game => widget.game;
+
+  // Command center: SHA-256-gated developer tools (parity with JS/Godot).
+  // Hash of the access code "Testing123!" — identical to the JS/Godot gate.
+  static const _debugHash =
+      '73ceb15f18bb0a313c8880abe54bf61a529dd8f1e75b084dd39926a1518d3d2f';
+  static const _debugUnlockKey = 'neonDefenseDebugUnlocked';
+  static const _pink = Color(0xFFFF00AC);
+  static const _yellow = Color(0xFFFCEE0A);
+
+  final TextEditingController _passController = TextEditingController();
+  bool _debugUnlocked = false;
+  bool _accessDenied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((p) {
+      if (p.getBool(_debugUnlockKey) == true && mounted) {
+        setState(() => _debugUnlocked = true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _passController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _tryUnlock() async {
+    final hash = sha256.convert(utf8.encode(_passController.text)).toString();
+    if (hash == _debugHash) {
+      final p = await SharedPreferences.getInstance();
+      await p.setBool(_debugUnlockKey, true);
+      if (mounted) setState(() => _debugUnlocked = true);
+    } else {
+      if (!mounted) return;
+      setState(() => _accessDenied = true);
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) setState(() => _accessDenied = false);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +105,7 @@ class _PauseMenuState extends State<PauseMenu> {
               _soundRow(),
               const SizedBox(height: 12),
               _qualityRow(),
+              _commandCenter(),
             ],
           ),
           ),
@@ -163,6 +212,125 @@ class _PauseMenuState extends State<PauseMenu> {
             ),
           ],
         ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Command center (JS/Godot parity): SHA-256-gated developer tools
+  // ---------------------------------------------------------------------------
+
+  Widget _ccHeader() => const Text(
+        'COMMAND CENTER',
+        style: TextStyle(
+          fontFamily: 'Orbitron',
+          fontSize: 10,
+          color: _pink,
+          letterSpacing: 2,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+
+  Widget _commandCenter() {
+    final gw = game.gameWorld;
+    if (!_debugUnlocked) {
+      return Column(
+        children: [
+          const SizedBox(height: 18),
+          _ccHeader(),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: 200,
+            child: TextField(
+              controller: _passController,
+              obscureText: true,
+              textAlign: TextAlign.center,
+              onSubmitted: (_) => _tryUnlock(),
+              style: const TextStyle(
+                  fontFamily: 'Orbitron', fontSize: 11, color: Colors.white),
+              decoration: const InputDecoration(
+                isDense: true,
+                hintText: 'ACCESS CODE',
+                hintStyle: TextStyle(
+                    color: Color(0x66FF00AC),
+                    fontFamily: 'Orbitron',
+                    fontSize: 10),
+                enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: _pink)),
+                focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: _pink)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          _menuBtn(_accessDenied ? 'ACCESS DENIED' : 'UNLOCK COMMAND CENTER',
+              _pink, _tryUnlock),
+        ],
+      );
+    }
+
+    Future<void> refreshAfter(Future<void> Function() op) async {
+      await op();
+      if (mounted) setState(() {});
+    }
+
+    return Column(
+      children: [
+        const SizedBox(height: 18),
+        _ccHeader(),
+        const SizedBox(height: 8),
+        _menuBtn('+1M CREDITS', _yellow,
+            () => setState(() => gw.debugAddMoney())),
+        const SizedBox(height: 8),
+        Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center,
+            children: [
+          _chipBtn('NEW RIFT',
+              selected: false,
+              onTap: () => refreshAfter(gw.debugCreateRift)),
+          _chipBtn('LEVEL UP RIFT',
+              selected: false,
+              onTap: () => setState(() => gw.debugLevelUpRift())),
+        ]),
+        const SizedBox(height: 8),
+        Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center,
+            children: [
+          for (final w in const [(1, '+1 WAVE'), (5, '+5 WAVES'),
+              (10, '+10 WAVES')])
+            _chipBtn(w.$2,
+                selected: false,
+                onTap: () =>
+                    refreshAfter(() => gw.waveSystem.debugIncreaseWave(w.$1))),
+        ]),
+        const SizedBox(height: 8),
+        Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center,
+            children: [
+          for (final n in const [5, 10, 25])
+            _chipBtn('+$n LVL',
+                selected: false,
+                onTap: () => setState(() => gw.debugUpgradeAllTowers(n))),
+        ]),
+        const SizedBox(height: 8),
+        _menuBtn('REBUILD RIFTS', const Color(0xFF00F3FF),
+            () => refreshAfter(gw.waveSystem.debugRebuildRifts)),
+        const SizedBox(height: 8),
+        _menuBtn('TOGGLE OVERLAY', _pink,
+            () => setState(() => gw.toggleNoBuildOverlay())),
+        const SizedBox(height: 8),
+        Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center,
+            children: [
+          for (final e in const [
+            (EnemyType.basic, 'BASIC'),
+            (EnemyType.fast, 'FAST'),
+            (EnemyType.tank, 'TANK'),
+            (EnemyType.splitter, 'SPLIT'),
+            (EnemyType.bulwark, 'BULW'),
+            (EnemyType.shifter, 'SHIFT'),
+            (EnemyType.boss, 'BOSS'),
+          ])
+            _chipBtn(e.$2,
+                selected: false,
+                onTap: () => setState(() => gw.debugSpawn(e.$1))),
+        ]),
       ],
     );
   }
