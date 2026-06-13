@@ -943,6 +943,26 @@ window.debugSpawn = function (type) {
     updateUI();
 };
 
+// Debug: add N upgrade levels to every placed tower for free. Same per-level
+// math as upgradeTower, so range stays clamped to MAX_TOWER_RANGE (never
+// infinite). Mirrored in the Godot and Flutter command centers.
+window.debugUpgradeAllTowers = function (levels) {
+    const n = Math.max(1, Math.floor(Number(levels) || 1));
+    for (const t of towers) {
+        for (let i = 0; i < n; i++) {
+            const cost = getUpgradeCost(t);
+            t.level++;
+            t.damage *= 1.2;
+            t.range = Math.min(t.range * 1.1, MAX_TOWER_RANGE);
+            t.totalCost = (t.totalCost || (t.cost * (t.level - 1))) + cost;
+        }
+        createParticles(t.x, t.y, '#00ff41', 8);
+    }
+    updateSelectionUI();
+    updateUI();
+    saveGame();
+};
+
 window.debugCreateRift = function () {
     const created = generateNewPath();
     // Force path recalculation or visual update if needed
