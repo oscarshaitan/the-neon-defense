@@ -124,6 +124,10 @@ class Tower extends PositionComponent
   }
 
   void _fire(Enemy target) {
+    if (type == TowerType.arc) {
+      _fireArc(target);
+      return;
+    }
     final proj = Projectile(
       startPos: position.clone(),
       target: target,
@@ -136,6 +140,65 @@ class Tower extends PositionComponent
     game.gameWorld.lights
         .emit(x: position.x, y: position.y, radius: 40, color: color);
     game.playShootSfx();
+  }
+
+  /// JS fireArcTower (05_loop.js:1312): an instant lightning chain. Hits the
+  /// target, then bounces to nearby enemies, applying static charge (which
+  /// stuns at the threshold). The connected-tower network bonus scales the
+  /// bolt intensity and static charge.
+  void _fireArc(Enemy target) {
+    final bonus = arcNetworkBonus.clamp(1, kArcMaxBonus);
+    final arc = game.gameWorld.arcLightning;
+    arc.emit(
+        x1: position.x,
+        y1: position.y,
+        x2: target.position.x,
+        y2: target.position.y,
+        intensity: bonus);
+    target.takeDamage(damage);
+    target.applyStaticCharge(bonus.toDouble());
+
+    final visited = <Enemy>{target};
+    var fromX = target.position.x;
+    var fromY = target.position.y;
+    final bounceDamage = damage * kArcBounceDamageMult;
+    for (var i = 0; i < kArcBaseChainTargets; i++) {
+      final next = _findArcBounce(fromX, fromY, visited);
+      if (next == null) break;
+      arc.emit(
+          x1: fromX,
+          y1: fromY,
+          x2: next.position.x,
+          y2: next.position.y,
+          intensity: bonus);
+      next.takeDamage(bounceDamage);
+      next.applyStaticCharge(1.0);
+      visited.add(next);
+      fromX = next.position.x;
+      fromY = next.position.y;
+    }
+    game.gameWorld.lights
+        .emit(x: position.x, y: position.y, radius: 46, color: color);
+    game.playShootSfx();
+  }
+
+  Enemy? _findArcBounce(double x, double y, Set<Enemy> visited) {
+    final candidates = spatialGrid.queryRadius(Vector2(x, y), kArcChainRange);
+    Enemy? nearest;
+    var minD2 = double.infinity;
+    for (final e in candidates) {
+      if (e.isDead || e.reachedCore || e.isInvisible || visited.contains(e)) {
+        continue;
+      }
+      final dx = e.position.x - x;
+      final dy = e.position.y - y;
+      final d2 = dx * dx + dy * dy;
+      if (d2 < minD2) {
+        minD2 = d2;
+        nearest = e;
+      }
+    }
+    return nearest;
   }
 
   // ---------------------------------------------------------------------------

@@ -164,6 +164,7 @@ const double kArcStaticThreshold = 100.0;
 const int kArcStunFrames = 30;
 const int kArcMinLinkSpacingCells = 1;
 const int kArcMaxLinkSpacingCells = 3;
+const int kArcMaxBonus = 5; // connected-component bonus cap (JS ARC_TOWER_RULES)
 
 // JS: MAX_TOWER_RANGE = 800 (00_core.js:54)
 const double kMaxTowerRange = 800.0;
