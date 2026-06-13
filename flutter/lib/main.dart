@@ -89,10 +89,18 @@ class _GamePageState extends State<_GamePage> {
       focusNode: _focusNode,
       autofocus: true,
       onKeyEvent: _onKey,
-      child: GameWidget<NeonDefenseGame>(
-        game: _game,
-        overlayBuilderMap: NeonDefenseApp.overlayBuilders(),
-        initialActiveOverlays: const ['startScreen'],
+      // Without a Material/Scaffold ancestor the only DefaultTextStyle in
+      // scope is the WidgetsApp error fallback (yellow double underline), which
+      // every overlay Text inherits since none override `decoration`. A
+      // transparent Material supplies a proper themed DefaultTextStyle
+      // (decoration: none) while letting the game render through.
+      child: Material(
+        type: MaterialType.transparency,
+        child: GameWidget<NeonDefenseGame>(
+          game: _game,
+          overlayBuilderMap: NeonDefenseApp.overlayBuilders(),
+          initialActiveOverlays: const ['startScreen'],
+        ),
       ),
     );
   }

@@ -57,6 +57,9 @@ class Projectile extends PositionComponent
 
   @override
   void render(Canvas canvas) {
+    // Flame's render origin is the component's top-left; center it (matches
+    // the other in-world entities so the bullet sits exactly on its position).
+    canvas.translate(size.x / 2, size.y / 2);
     canvas.drawCircle(
       Offset.zero,
       2,

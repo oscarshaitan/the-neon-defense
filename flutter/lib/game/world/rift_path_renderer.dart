@@ -45,7 +45,7 @@ class RiftPathRenderer extends Component
             ..strokeCap = StrokeCap.round
             ..strokeJoin = StrokeJoin.round
             ..maskFilter =
-                MaskFilter.blur(BlurStyle.normal, highlighted ? 16 : 8));
+                MaskFilter.blur(BlurStyle.normal, highlighted ? 20 : 12));
 
   Paint _centerPaint(Color color, bool highlighted) =>
       _centerPaints.putIfAbsent(Object.hash(color.toARGB32(), highlighted),
@@ -117,9 +117,12 @@ class RiftPathRenderer extends Component
           (riftLevel > 1 ? const Color(0xFFFF00AC) : const Color(0xFF00F3FF));
 
       // 1. Wide glow background — JS lineWidth GRID_SIZE * (1.6 sel / 0.8).
+      // JS layers a shadowBlur colored halo over the faint trunk; with a single
+      // blurred stroke we need a higher alpha or the halo is invisible (the
+      // "rifts are only lines" report).
       final glowAlpha = isHighlighted
-          ? 0x33
-          : (mutation != null ? 0x11 : (riftLevel > 1 ? 0x1A : 0x0D));
+          ? 0x5C
+          : (mutation != null ? 0x30 : (riftLevel > 1 ? 0x3D : 0x24));
       canvas.drawPath(geometry.fullPath,
           _glowPaint(lineColor, glowAlpha, isHighlighted));
 
