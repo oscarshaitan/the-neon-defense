@@ -25,7 +25,8 @@ var _hint: Label
 var _wave_label: Label
 var _lives_label: Label
 var _credits_label: Label
-var _center_label: Label
+var _timer_label: Label
+var _enemies_label: Label
 var _fps_label: Label
 var _energy_bar: ProgressBar
 var _tower_buttons := {}
@@ -68,6 +69,12 @@ func _ready() -> void:
 # ---------------------------------------------------------------------------
 # Style helpers
 # ---------------------------------------------------------------------------
+
+## Expanding spacer — between stats-bar items it produces JS space-between.
+func _hspacer() -> Control:
+	var s := Control.new()
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return s
 
 func _label(text: String, size: int, color: Color) -> Label:
 	var l := Label.new()
@@ -196,8 +203,10 @@ func _build_hud() -> void:
 	stats.offset_top = 8
 	_hud_root.add_child(stats)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override(&"separation", 18)
+	row.add_theme_constant_override(&"separation", 8)
 	stats.add_child(row)
+	# JS #stats-bar order, spread across the bar (space-between): WAVE ·
+	# NEXT WAVE · LIVES · CREDITS · ENEMIES · FPS · pause.
 	_wave_label = _label("WAVE: 1", 12, C.COL_BLUE)
 	var wave_btn := Button.new()
 	wave_btn.flat = true
@@ -206,22 +215,24 @@ func _build_hud() -> void:
 		_refresh_wave_intel())
 	_wave_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	wave_btn.add_child(_wave_label)
-	wave_btn.custom_minimum_size = Vector2(90, 0)
+	wave_btn.custom_minimum_size = Vector2(80, 0)
 	row.add_child(wave_btn)
+	row.add_child(_hspacer())
+	_timer_label = _label("", 12, C.COL_GREEN)
+	row.add_child(_timer_label)
+	row.add_child(_hspacer())
 	_lives_label = _label("LIVES: 20", 12, C.COL_BLUE)
 	row.add_child(_lives_label)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(spacer)
-	_center_label = _label("", 12, C.COL_GREEN)
-	row.add_child(_center_label)
-	var spacer2 := Control.new()
-	spacer2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(spacer2)
+	row.add_child(_hspacer())
 	_credits_label = _label("CREDITS: 100", 12, C.COL_YELLOW)
 	row.add_child(_credits_label)
+	row.add_child(_hspacer())
+	_enemies_label = _label("ENEMIES: 0", 12, C.COL_RED)
+	row.add_child(_enemies_label)
+	row.add_child(_hspacer())
 	_fps_label = _label("FPS: --", 11, Color(C.COL_BLUE, 0.7))
 	row.add_child(_fps_label)
+	row.add_child(_hspacer())
 	row.add_child(_button("II", C.COL_BLUE, main.toggle_pause))
 
 	# --- START WAVE ---
@@ -337,14 +348,11 @@ func _refresh_stats() -> void:
 	_lives_label.text = "LIVES: %d" % State.lives
 	_credits_label.text = "CREDITS: %d" % int(State.money)
 	_fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
-	if world.is_prep_phase:
-		_center_label.text = "NEXT WAVE: %ds" % ceili(world.prep_timer)
-		_center_label.add_theme_color_override(&"font_color", C.COL_GREEN)
-	elif State.is_wave_active:
-		_center_label.text = "ENEMIES: %d" % (world.enemies.size() + world.spawn_queue.size())
-		_center_label.add_theme_color_override(&"font_color", C.COL_RED)
-	else:
-		_center_label.text = ""
+	# NEXT WAVE shows only during prep (JS #timer-display); ENEMIES is always
+	# present (JS #enemy-info), counting live + queued.
+	_timer_label.text = ("NEXT WAVE: %ds" % ceili(world.prep_timer)) \
+			if world.is_prep_phase else ""
+	_enemies_label.text = "ENEMIES: %d" % (world.enemies.size() + world.spawn_queue.size())
 	var start_wave: Button = _hud_root.find_child("StartWave", true, false)
 	start_wave.visible = world.is_prep_phase
 	for type in _tower_buttons:
