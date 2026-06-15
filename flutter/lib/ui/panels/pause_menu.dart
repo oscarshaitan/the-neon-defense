@@ -101,6 +101,9 @@ class _PauseMenuState extends State<PauseMenu> {
                 game.overlays.remove('pauseMenu');
                 game.resetGame();
               }),
+              const SizedBox(height: 10),
+              _menuBtn('TECH TREE', _yellow,
+                  () => game.openTechTree('pauseMenu')),
               const SizedBox(height: 18),
               _soundRow(),
               const SizedBox(height: 12),
@@ -281,6 +284,12 @@ class _PauseMenuState extends State<PauseMenu> {
         const SizedBox(height: 8),
         _menuBtn('+1M CREDITS', _yellow,
             () => setState(() => gw.debugAddMoney())),
+        const SizedBox(height: 8),
+        Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center,
+            children: [
+          for (final r in const [1, 5, 10])
+            _chipBtn('+$r RP', selected: false, onTap: () => game.tech.grantRp(r)),
+        ]),
         const SizedBox(height: 8),
         Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center,
             children: [

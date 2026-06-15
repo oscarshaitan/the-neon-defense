@@ -141,6 +141,42 @@ func _run() -> void:
 		total10 += w10[type]
 	_check(total10 == 31, "wave 10 predicts 31 hostiles")
 
+	# --- Tech Tree (Milestone E) ---
+	var T = root.get_node("/root/Tech")
+	_check(T != null, "Tech autoload present")
+	T.reset_progress()
+	_check(T.NODES.size() == 16, "16 tech nodes defined")
+	_check(absf(float(T.fx.dmg_mult) - 1.0) < 0.001, "default damage mult = 1.0")
+	T.grant_rp(100)
+	_check(not T.can_unlock(T.node_by_id("off_2")), "off_2 gated by prereq even with RP")
+	_check(T.can_unlock(T.node_by_id("off_1")), "off_1 unlockable with RP")
+	_check(T.unlock("off_1"), "unlock off_1 (focused optics)")
+	_check(absf(float(T.fx.dmg_mult) - 1.08) < 0.001, "off_1 applies +8% damage")
+	_check(T.unlock("off_2"), "unlock off_2 after prereq met")
+	_check(absf(float(T.fx.dmg_mult) - 1.08 * 1.12) < 0.001, "off_2 stacks damage mult")
+	_check(T.unlock("con_1"), "unlock con_1 (cryo conductors)")
+	_check(bool(T.fx.arc_chill), "con_1 enables arc chill")
+	_check(T.unlock("eco_1"), "unlock eco_1 (salvage routines)")
+	_check(absf(float(T.fx.reward_mult) - 1.15) < 0.001, "eco_1 grants +15% reward")
+	# Start-of-run bonuses apply on a fresh run.
+	_check(T.unlock("eco_2"), "unlock eco_2 (bulk discount)")
+	_check(T.unlock("eco_3"), "unlock eco_3 (war chest)")
+	_check(T.unlock("core_1"), "unlock core_1 (reinforced plating)")
+	main.reset_game()
+	_check(absf(S.money - (Con.STARTING_MONEY + 150.0)) < 0.001, "WAR CHEST: +150 start money")
+	_check(S.lives == Con.STARTING_LIVES + 5, "REINFORCED PLATING: +5 start lives")
+	# Persistence round trip (carries across runs).
+	T._save()
+	var saved_rp: int = T.rp
+	T.rp = 0
+	T.unlocked = {}
+	T._recompute()
+	T._load()
+	T._recompute()
+	_check(T.rp == saved_rp, "tech RP survives save/load")
+	_check(T.is_unlocked("off_1") and T.is_unlocked("core_1"), "tech unlocks survive save/load")
+	T.reset_progress() # leave persistent state clean
+
 	if _failures.is_empty():
 		print("== ALL CHECKS PASSED ==")
 		quit(0)

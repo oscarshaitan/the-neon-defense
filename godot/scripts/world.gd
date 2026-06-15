@@ -32,6 +32,7 @@ class Enemy:
 	var rift_level := 1
 	var is_mutant := false
 	var frozen := 0
+	var chill := 0 # Tech CONTROL: slowed (not stopped) by arc Cryo Conductors
 	var static_charges := 0.0
 	var stun := 0
 	var invisible := false
@@ -81,6 +82,7 @@ var current_wave_distribution := {}
 # --- Base turret (JS baseLevel/baseCooldown) ---
 var base_level := 0
 var base_cooldown := 0
+var _last_stand_used := false # Tech CORE capstone fires once per run
 
 # --- Abilities ---
 var targeting_ability: StringName = &""
@@ -277,6 +279,7 @@ func _step_wave() -> void:
 			_spawn_next()
 		if spawn_queue.is_empty() and enemies.is_empty():
 			State.is_wave_active = false
+			Tech.award_wave(State.wave) # earn Research Points for the cleared wave
 			State.wave += 1
 			start_prep_phase()
 			save_system.save_now()
@@ -433,11 +436,17 @@ func _step_enemies() -> void:
 		var diff := target - e.pos
 		var dist := diff.length()
 		var old := e.pos
-		if dist <= e.speed:
+		var spd := e.speed
+		if e.chill > 0:
+			e.chill -= 1
+			spd *= Tech.CHILL_SLOW
+			if State.frame_count % 16 == 0:
+				create_particles(e.pos, C.COL_BLUE, 1, 0)
+		if dist <= spd:
 			e.pos = target
 			e.path_index += 1
 		else:
-			e.pos += diff / dist * e.speed
+			e.pos += diff / dist * spd
 		_grid_update(e, old)
 		if e.type == &"shifter":
 			e.invisible = (State.frame_count % 360) > 180
@@ -450,17 +459,30 @@ func _enemy_reached_core(e: Enemy, index: int) -> void:
 	State.start_shake(20.0)
 	AudioEngine.play_sfx(&"hit")
 	if State.lives <= 0:
-		game_over()
+		# Tech CORE capstone: Last Stand Protocol — survive once per run.
+		if Tech.fx.last_stand and not _last_stand_used:
+			_last_stand_used = true
+			State.lives = Tech.LAST_STAND_LIVES
+			State.show_toast("LAST STAND PROTOCOL")
+			create_particles(core_pos, C.COL_GREEN, 30)
+		else:
+			game_over()
 
 func hit_enemy(e: Enemy, damage: float) -> void:
+	damage *= Tech.fx.dmg_mult # Tech OFFENSE: global tower damage
 	if e.frozen > 0:
 		damage *= 1.2 # JS hitEnemy frozen bonus
+	if e.frozen > 0 or e.chill > 0:
+		damage *= Tech.fx.thermal_mult # Tech CONTROL: Thermal Weakness
+	# Tech OFFENSE capstone: Executioner — finish low-HP targets.
+	if Tech.fx.execute and e.max_hp > 0.0 and e.hp / e.max_hp <= Tech.EXECUTE_THRESHOLD:
+		damage *= Tech.EXECUTE_BONUS
 	e.hp -= damage
 	if e.hp <= 0 and not e.dead:
 		e.dead = true
 		_grid_remove(e)
 		enemies.erase(e)
-		State.money += e.reward
+		State.money += e.reward * Tech.fx.reward_mult # Tech ECONOMY: Salvage
 		State.add_energy(1.0)
 		State.record_kill(e.type)
 		create_particles(e.pos, e.color, 4, 2)
@@ -610,6 +632,8 @@ func _fire(t: Tower, target: Enemy) -> void:
 func _fire_arc(t: Tower, target: Enemy) -> void:
 	hit_enemy(target, t.damage)
 	apply_static(target, float(t.arc_bonus))
+	if Tech.fx.arc_chill:
+		target.chill = Tech.CHILL_FRAMES
 	add_arc_burst(t.pos, target.pos, t.arc_bonus)
 	var visited := {target: true}
 	var from := target.pos
@@ -619,6 +643,8 @@ func _fire_arc(t: Tower, target: Enemy) -> void:
 		if next == null:
 			break
 		hit_enemy(next, bounce_damage)
+		if Tech.fx.arc_chill:
+			next.chill = Tech.CHILL_FRAMES
 		apply_static(next, 1.0)
 		add_arc_burst(from, next.pos, maxi(1, t.arc_bonus - 1))
 		visited[next] = true
@@ -699,13 +725,13 @@ func build_tower(world_pos: Vector2, type: StringName) -> bool:
 	t.total_cost = def.cost
 	if hp.is_empty():
 		t.damage = def.damage
-		t.range = def.range
+		t.range = minf(def.range * Tech.fx.range_mult, C.MAX_TOWER_RANGE)
 		t.max_cooldown = def.cooldown
 	else:
 		hp.occupied = true
 		t.hardpoint = hp
 		t.damage = def.damage * mult.damage
-		t.range = minf(def.range * mult.range, C.MAX_TOWER_RANGE)
+		t.range = minf(def.range * mult.range * Tech.fx.range_mult, C.MAX_TOWER_RANGE)
 		t.max_cooldown = maxi(4, roundi(def.cooldown * mult.cooldown))
 		t.scale = mult.scale
 		hardpoints_changed.emit()
@@ -753,17 +779,16 @@ func sell_selected() -> void:
 	save_system.save_now()
 
 static func upgrade_cost(t: Tower) -> float:
-	return floorf(t.base_cost * 0.5 * t.level)
+	return floorf(t.base_cost * 0.5 * t.level * Tech.fx.upgrade_cost_mult) # Tech ECONOMY
 
 static func sell_value(t: Tower) -> float:
-	return floorf(t.total_cost * 0.7)
+	return floorf(t.total_cost * Tech.fx.sell_refund) # Tech ECONOMY (default 0.7)
 
 # --- Base repair/upgrade (JS quirks preserved: +2 lives, +2 levels) ---
 
 func base_repair_cost() -> float:
-	if State.lives < 20:
-		return 50.0
-	return 50.0 + (State.lives - 20 + 1) * 25.0
+	var base := 50.0 if State.lives < 20 else 50.0 + (State.lives - 20 + 1) * 25.0
+	return floorf(base * Tech.fx.repair_cost_mult) # Tech CORE: Field Repairs
 
 func base_upgrade_cost() -> float:
 	return 200.0 * (base_level + 1)
@@ -803,9 +828,11 @@ func use_ability(world_pos: Vector2) -> void:
 	targeting_ability = &""
 	if ability == &"emp":
 		State.energy -= C.EMP_COST
+		var radius: float = C.EMP_RADIUS * Tech.fx.emp_radius_mult # Tech CONTROL: Deep Freeze
+		var freeze := int(C.EMP_DURATION_FRAMES * Tech.fx.emp_freeze_mult) # Cryo EMP
 		for e in enemies:
-			if e.pos.distance_to(world_pos) <= C.EMP_RADIUS:
-				e.frozen = C.EMP_DURATION_FRAMES
+			if e.pos.distance_to(world_pos) <= radius:
+				e.frozen = freeze
 		create_particles(world_pos, C.COL_BLUE, 20)
 		add_light(world_pos, 250.0, C.COL_BLUE)
 	elif ability == &"overclock":
@@ -960,6 +987,7 @@ func reset() -> void:
 		hp.occupied = false
 	base_level = 0
 	base_cooldown = 0
+	_last_stand_used = false
 	is_prep_phase = false
 	targeting_ability = &""
 	show_no_build_overlay = false
@@ -1095,13 +1123,13 @@ func _stress_build(world_pos: Vector2, type: StringName) -> bool:
 	t.total_cost = def.cost
 	if hp.is_empty():
 		t.damage = def.damage
-		t.range = def.range
+		t.range = minf(def.range * Tech.fx.range_mult, C.MAX_TOWER_RANGE)
 		t.max_cooldown = def.cooldown
 	else:
 		hp.occupied = true
 		t.hardpoint = hp
 		t.damage = def.damage * mult.damage
-		t.range = minf(def.range * mult.range, C.MAX_TOWER_RANGE)
+		t.range = minf(def.range * mult.range * Tech.fx.range_mult, C.MAX_TOWER_RANGE)
 		t.max_cooldown = maxi(4, roundi(def.cooldown * mult.cooldown))
 		t.scale = mult.scale
 	towers.append(t)

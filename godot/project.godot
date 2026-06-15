@@ -13,6 +13,7 @@ config/icon="res://icon.svg"
 
 State="*res://scripts/game_state.gd"
 AudioEngine="*res://scripts/audio_engine.gd"
+Tech="*res://scripts/tech_tree.gd"
 
 [display]
 

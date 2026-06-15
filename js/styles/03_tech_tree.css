@@ -1,0 +1,202 @@
+/* The Neon Defense - Tech Tree overlay (Milestone E) */
+
+#tech-tree-screen {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 50% 30%, rgba(0, 243, 255, 0.08), transparent 55%),
+        rgba(5, 5, 16, 0.97);
+    backdrop-filter: blur(6px);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    pointer-events: auto;
+    z-index: 200;
+    box-sizing: border-box;
+    padding: clamp(16px, 3vw, 36px);
+    overflow-y: auto;
+    font-family: 'Orbitron', sans-serif;
+}
+
+.tech-tree-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.tech-tree-header h1 {
+    margin: 0;
+    color: var(--neon-blue);
+    text-shadow: 0 0 12px var(--neon-blue);
+    font-size: clamp(1.4rem, 4vw, 2rem);
+}
+
+.tech-rp-balance {
+    flex: 1;
+    text-align: right;
+    color: var(--neon-yellow);
+    text-shadow: 0 0 6px var(--neon-yellow);
+    font-weight: bold;
+    font-size: clamp(0.8rem, 2vw, 1rem);
+    letter-spacing: 1px;
+}
+
+.tech-close-btn {
+    background: transparent;
+    border: 1px solid var(--neon-pink);
+    color: var(--neon-pink);
+    padding: 8px 18px;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border-radius: 6px;
+    box-shadow: 0 0 8px rgba(255, 0, 172, 0.4);
+    transition: background 0.15s, color 0.15s;
+}
+
+.tech-close-btn:hover {
+    background: var(--neon-pink);
+    color: #050510;
+}
+
+.tech-tree-subtitle {
+    color: rgba(0, 243, 255, 0.55);
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
+    margin: 8px 0 18px;
+}
+
+.tech-tree-branches {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    align-items: start;
+    flex: 1;
+}
+
+@media (max-width: 720px) {
+    .tech-tree-branches {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.tech-branch {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tech-branch-head {
+    text-align: center;
+    font-weight: bold;
+    letter-spacing: 2px;
+    color: var(--branch-color, var(--neon-blue));
+    text-shadow: 0 0 8px var(--branch-color, var(--neon-blue));
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--branch-color, var(--neon-blue));
+    font-size: 0.85rem;
+}
+
+.tech-node {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 10px;
+    background: rgba(5, 5, 16, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.tech-node.acquired {
+    border-color: var(--neon-green);
+    box-shadow: 0 0 8px rgba(0, 255, 65, 0.35);
+}
+
+.tech-node.unlockable {
+    border-color: var(--neon-blue);
+    box-shadow: 0 0 8px rgba(0, 243, 255, 0.3);
+}
+
+.tech-node.locked {
+    opacity: 0.6;
+}
+
+.tech-node-name {
+    font-weight: bold;
+    font-size: 0.78rem;
+    letter-spacing: 0.5px;
+    color: #ffffff;
+}
+
+.tech-node.acquired .tech-node-name {
+    color: var(--neon-green);
+}
+
+.tech-node.locked .tech-node-name {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.tech-node-desc {
+    font-size: 0.62rem;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.tech-node.locked .tech-node-desc {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.tech-node-status {
+    font-size: 0.6rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    margin-top: 2px;
+}
+
+.tech-node-status.acquired {
+    color: var(--neon-green);
+}
+
+.tech-node-status.locked {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.tech-unlock-btn {
+    margin-top: 4px;
+    background: transparent;
+    border: 1px solid var(--neon-blue);
+    color: var(--neon-blue);
+    padding: 6px 8px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.62rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background 0.15s, color 0.15s;
+}
+
+.tech-unlock-btn:hover {
+    background: var(--neon-blue);
+    color: #050510;
+}
+
+.tech-unlock-btn.unaffordable,
+.tech-unlock-btn:disabled {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.4);
+    cursor: not-allowed;
+}
+
+.tech-unlock-btn.unaffordable:hover,
+.tech-unlock-btn:disabled:hover {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.tech-tree-menu-btn {
+    border-color: var(--neon-yellow) !important;
+    color: var(--neon-yellow) !important;
+}

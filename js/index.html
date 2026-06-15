@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="styles/00_base_ui.css">
     <link rel="stylesheet" href="styles/01_abilities_debug.css">
     <link rel="stylesheet" href="styles/02_tutorial_and_responsive.css">
+    <link rel="stylesheet" href="styles/03_tech_tree.css">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 </head>
 
@@ -143,11 +144,13 @@
                 <h1>PAUSED</h1>
                 <div class="menu-buttons">
                     <button onclick="togglePause()">RESUME</button>
-                    <button onclick="saveGame()">FORCE SAVE</button>
+                    <button onclick="openTechTree()" class="tech-tree-menu-btn">TECH TREE</button>
+                    <button onclick="saveGame()">SAVE</button>
+                    <button onclick="resetGame()">RESET</button>
                     <a href="manual.html" target="_blank" class="menu-link">PLAYER MANUAL</a>
                     <a href="technical_docs.html" target="_blank" class="menu-link">TECH SPECS</a>
                     <div class="sound-settings">
-                        <h3>AUDIO SETTINGS</h3>
+                        <h3>SOUND</h3>
                         <div class="setting-item">
                             <label>MUSIC</label>
                             <input type="range" min="0" max="1" step="0.05" value="0.5" id="music-slider"
@@ -178,6 +181,14 @@
                     <div class="debug-menu hidden" id="command-center">
                         <h3>COMMAND CENTER</h3>
                         <button class="debug-btn money-btn" onclick="addDebugMoney()">+1M CREDITS</button>
+                        <div style="display: flex; gap: 5px; margin-bottom: 5px; width: 100%;">
+                            <button class="debug-btn" style="flex: 1; font-size: 0.7rem; color: var(--neon-pink);"
+                                onclick="TECH.grantRp(1)">+1 RP</button>
+                            <button class="debug-btn" style="flex: 1; font-size: 0.7rem; color: var(--neon-pink);"
+                                onclick="TECH.grantRp(5)">+5 RP</button>
+                            <button class="debug-btn" style="flex: 1; font-size: 0.7rem; color: var(--neon-pink);"
+                                onclick="TECH.grantRp(10)">+10 RP</button>
+                        </div>
                         <div style="display: flex; gap: 5px; margin-bottom: 5px; width: 100%;">
                             <button class="debug-btn" style="flex: 1; font-size: 0.7rem;"
                                 onclick="debugCreateRift()">NEW RIFT</button>
@@ -229,6 +240,7 @@
                 <h1>THE NEON DEFENSE</h1>
                 <p>PROTECT THE CORE</p>
                 <button onclick="checkPlayerName()">INITIATE</button>
+                <button onclick="openTechTree()" class="tech-tree-menu-btn">TECH TREE</button>
                 <div class="start-links">
                     <a href="manual.html" target="_blank">MANUAL</a>
                     <a href="technical_docs.html" target="_blank">TECHNICAL</a>
@@ -268,6 +280,17 @@
                 </div>
             </div>
             <div id="inline-hint" class="hidden"></div>
+
+            <div id="tech-tree-screen" class="hidden">
+                <div class="tech-tree-header">
+                    <h1>TECH TREE</h1>
+                    <div id="tech-rp-balance" class="tech-rp-balance">RESEARCH: 0 RP</div>
+                    <button class="tech-close-btn" onclick="closeTechTree()">CLOSE</button>
+                </div>
+                <p class="tech-tree-subtitle">Spend Research Points on permanent upgrades. Earned each
+                    wave; progress carries across runs.</p>
+                <div id="tech-tree-branches" class="tech-tree-branches"></div>
+            </div>
         </div>
         <div id="quality-toast" class="quality-toast hidden"></div>
     </div>
@@ -278,6 +301,7 @@
     <script src="scripts/04_tutorial.js"></script>
     <script src="scripts/05_loop.js"></script>
     <script src="scripts/06_render.js"></script>
+    <script src="scripts/07_tech_tree.js"></script>
 </body>
 
 </html>

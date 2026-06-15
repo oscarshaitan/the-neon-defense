@@ -11,6 +11,21 @@ This roadmap tracks practical priorities for gameplay quality, balance stability
 
 ---
 
+## Current State (2026-06)
+
+The game ships as three editions (JS reference, Flutter, Godot) at behavioral
+parity. Foundational UX and tooling are largely in place; the open frontier is
+**strategic depth and late-game solvability**, not feature parity.
+
+- ✅ Shipped: tutorial + hints, Wave Intelligence, quality governor, the Arc
+  tower + inter-tower network, a developer **command center** (credits, spawn,
+  rifts, wave jumps, bulk upgrade, no-build overlay) and a one-tap **STRESS
+  TEST** level — a first step toward Milestone G's balance-testing tooling.
+- ⏳ Not yet started: the Tech Tree (E), the Disruptor tower + modifiers (D2/D3),
+  late-game core-area solvability (C), and a between-runs progression/meta loop.
+
+---
+
 ## Milestone A: Stability and UX Foundation
 
 ### A1. Input and Interaction Quality
@@ -126,10 +141,48 @@ Goal: custom strategy progression that changes decision-making each run.
 
 ## Milestone G: Production and Tooling
 
-- [ ] Add deterministic simulation mode for balance testing
+- [~] Deterministic simulation mode for balance testing — partial: the command-center **STRESS TEST** builds a fixed worst-case scenario, and the Godot headless smoke test exercises a full wave. Still missing: seeded determinism + an automated multi-wave sim.
 - [ ] Add debug replay snapshots for difficult-wave diagnosis
-- [ ] Add metric logger for wave clear rates by segment
+- [ ] Add metric logger for wave clear rates by segment (loss-wave, loss-reason, tower-usage distribution)
 - [ ] Add lightweight balancing checklist before each release
+
+---
+
+## What's Really Missing — Priority View
+
+An opinionated read on the highest-leverage gaps, in order. The editions are at
+parity and the moment-to-moment loop is solid; what's missing is **reasons to
+keep playing and reasons to build differently**.
+
+1. **A reason to play again (meta/progression).** The biggest gap. Today every
+   run starts identical and nothing carries over — it's one endless score
+   attack. The Tech Tree (Milestone E) with a between-runs research currency and
+   a pre-run loadout is the single highest-leverage addition for retention. Even
+   a thin v1 (one branch + research points) changes "play once" into "plan a build."
+
+2. **Late-game core-area solvability (Milestone C).** The most likely *unfair*
+   loss today is geometric: as rift count rises, buildable tiles near the core
+   vanish and the loss becomes a lockout, not a decision. The **Core Exclusion
+   Ring** (reserve a minimum buildable ring) is the most concrete fix and should
+   come before more content. The new STRESS TEST makes this easy to reproduce.
+
+3. **A real fourth role / fix tower-role compression (Milestone D).** Only four
+   towers, and one of them (Rapid) is effectively dominated (see the balance
+   analysis). The Disruptor (utility/Expose) adds the missing "support" axis;
+   equally important is giving Rapid a genuine niche so all four are picked.
+
+4. **Telemetry + a deterministic sim (Milestone G).** Nothing here can be tuned
+   confidently without data: loss-wave, loss-reason, and tower-usage
+   distribution. This is cheap to add (the STRESS TEST and headless smoke test
+   are the seed) and unblocks every balance decision below.
+
+5. **Difficulty/accessibility options.** A single fixed curve excludes both
+   newer and expert players — an assist ruleset and/or challenge presets
+   (Milestone F) widen the audience for little cost.
+
+Lower priority until the above land: modifier chips, synergy tags, seasonal
+modifiers, and the deferred Mortar/Prism towers — all add surface area before
+the core depth and fairness problems are solved.
 
 ---
 
@@ -152,4 +205,4 @@ Goal: custom strategy progression that changes decision-making each run.
 
 ---
 
-Last updated: 2026-02-12
+Last updated: 2026-06-15

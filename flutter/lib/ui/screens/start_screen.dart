@@ -84,6 +84,12 @@ class _StartScreenState extends State<StartScreen> {
                 label: 'INITIATE',
                 onPressed: game.startGame,
               ),
+            const SizedBox(height: 12),
+            _NeonButton(
+              label: 'TECH TREE',
+              color: const Color(0xFFFCEE0A),
+              onPressed: () => game.openTechTree('startScreen'),
+            ),
           ],
         ),
       ),

@@ -191,9 +191,17 @@ func toggle_pause() -> void:
 # ---------------------------------------------------------------------------
 
 func start_game() -> void:
+	_apply_tech_run_bonuses()
 	State.phase = State.Phase.PLAYING
 	world.start_prep_phase()
 	world.tutorial.maybe_start()
+
+## Tech Tree start-of-run bonuses (credits/lives/energy). Applied to the fresh
+## default state of a new run — never on the save-load path.
+func _apply_tech_run_bonuses() -> void:
+	State.money += Tech.fx.start_money
+	State.lives += Tech.fx.start_lives
+	State.energy += Tech.fx.start_energy
 
 func continue_game() -> void:
 	if not world.save_system.load_game():
@@ -204,6 +212,7 @@ func continue_game() -> void:
 
 func reset_game() -> void:
 	State.reset()
-	State.phase = State.Phase.PLAYING
 	world.reset()
+	_apply_tech_run_bonuses()
+	State.phase = State.Phase.PLAYING
 	world.start_prep_phase()

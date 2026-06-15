@@ -46,17 +46,38 @@ A neon-styled tower defense game — defend the core crystal against escalating 
 |---|---|
 | Left click / Tap | Select · place · interact |
 | Drag | Pan camera |
-| Scroll / Pinch | Zoom (0.1× – 1.0×) |
+| Scroll / Pinch | Zoom — 0.1×–1.0× (Godot 0.1×–2.0×) |
 | `Q` `W` `E` `R` | Select tower type |
 | `1` `2` | Ability targeting |
 | `U` | Upgrade selected tower |
 | `Del` / `Bksp` | Sell selected tower |
+| `F` / `G` | Repair base / install·upgrade turret (Godot; hold to repeat) |
 | `Esc` / `P` | Pause |
+
+All three editions show a live **FPS counter** in the stats bar (Godot/Flutter hide it on very narrow phone widths).
 
 ### Mobile / Touch
 - Tower bar and ability slots are always visible as tap targets
 - Pinch to zoom, drag to pan
 - Recenter button (bottom-right) snaps camera back to core
+
+---
+
+## Developer Command Center
+
+All three editions ship a SHA-256-gated **command center** — a developer debug
+panel inside the pause menu (the JS panel is in the pause overlay). Unlock it
+with the access code, then use:
+
+- **+1M credits**
+- **Spawn** any enemy type (basic / fast / tank / splitter / bulwark / shifter / boss)
+- **Rifts** — create a new rift, level up a rift, rebuild rift topology
+- **Wave jumps** — +1 / +5 / +10 waves (skipped waves are simulated for correct pacing)
+- **Bulk upgrade** — `+5 / +10 / +25 LVL` to every tower at once (range stays clamped to the 800 cap — never infinite)
+- **Toggle overlay** — the spatial-zoning / no-build debug overlay
+- **STRESS TEST** — builds a synthetic worst-case level for performance evaluation: maxed base turret + 1000 lives, ~20 level-1 rifts, a dense ring of every tower type packed around the core (including a connected arc cluster), and 100 mixed enemies
+
+The unlock state persists (localStorage / `shared_preferences` / a `user://` marker).
 
 ---
 
@@ -140,9 +161,11 @@ the-neon-defense/
         config/
           constants.dart      — All game constants (mirrors JS 00_core.js)
         world/
-          game_world.dart     — World component, entity managers
+          game_world.dart     — World component, entity managers, arc network
           tile_grid.dart      — Grid rendering (infinite, white lines)
           hardpoint_manager.dart
+          arc_tower_links.dart  — Inter-tower arc link rendering
+          no_build_overlay.dart — Command-center spatial-zoning overlay
         entities/
           towers/tower.dart
           enemies/enemy.dart
@@ -231,8 +254,8 @@ the-neon-defense/
 
 - Player manual: `js/manual.html`
 - Technical reference: `js/technical_docs.html`
+- Cross-edition learnings & comparison: `LEARNINGS.md`
 - Feature roadmap: `ROADMAP.md`
 - Balance analysis: `GAME_BALANCE_ANALYSIS.md`
-- Flutter parity migration plan: `FLUTTER_MIGRATION_PLAN.md`
 - Godot migration plan: `GODOT_MIGRATION_PLAN.md`
 - Performance/optimization log: `Improvements.md`

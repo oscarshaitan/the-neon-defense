@@ -13,6 +13,72 @@ It is intentionally focused on design suggestions, not code changes.
 
 ---
 
+## 0. Observed Imbalances (current numbers)
+
+Grounded in the live constants (`js/scripts/00_core.js`), mirrored 1:1 in the
+Flutter and Godot editions. These are concrete, measurable issues — not just
+risks.
+
+### Tower value table
+
+| Tower | Cost | Dmg | Cooldown | DPS¹ | DPS / credit | Range | Notes |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Basic | 50 | 10 | 30f (0.5s) | 20.0 | **0.40** | 100 | best raw efficiency |
+| Rapid | 120 | 4 | 10f (0.17s) | 24.0 | 0.20 | 80 | — |
+| Sniper | 200 | 50 | 90f (1.5s) | 33.3 | 0.17 | 250 | boss killer; poor vs swarms |
+| Arc | 180 | 8 | 34f (0.57s) | 14.1² | 0.08² | 100 | AoE chain + stun; scales ×1–5 with network |
+
+¹ single-target DPS at level 1. ² Arc also hits up to 3 bounce targets at 0.7×
+and applies static charge (stun at threshold); its network bonus (component
+size, capped 5) multiplies static charge — so its *effective* AoE/control value
+is far above the single-target number.
+
+**Problem 1 — Rapid is dominated by Basic.** Rapid costs 2.4× a Basic for half
+the DPS/credit (0.20 vs 0.40) *and* shorter range (80 vs 100). Its only edge is
++4 raw single-target DPS in one footprint — a weak niche that rarely justifies
+the price. Two Basics (100 credits) out-DPS one Rapid (120) with more coverage.
+There is currently **no scenario where Rapid is the correct pick**.
+
+**Problem 2 — linear enemy HP vs multiplicative tower scaling.** Enemy HP grows
+*linearly*: `hp = base × (1 + wave × 0.4)` (basic = 330 HP at wave 25), then
+×`(1 + 0.5·(tier−1))` per rift tier and ×mutation (TITAN = ×3). Tower output
+grows *multiplicatively* via upgrades (×1.2 dmg/level). The curves cross: early
+on, fresh towers fall behind (you *must* upgrade or leak); late, a well-upgraded
+field snowballs past the linear threat. The result is a curve that feels either
+punishing or trivial, rarely tuned — exactly the "economy/scaling volatility"
+risk in §2–3, now quantified.
+
+**Problem 3 — range stops being a lever.** The 800 cap is reached by a Sniper in
+~12–13 upgrades (`250 × 1.1ⁿ`), after which range is a non-choice and only
+damage matters.
+
+**Problem 4 — Arc network is now a live dominance candidate.** With the
+inter-tower network implemented across all editions, a cardinally aligned line
+of Arc towers reaches the ×5 bonus, turning Arc into a high-value AoE+stun
+anchor. Worth watching against the "single-combo domination" guardrail — the
+STRESS TEST builds exactly this configuration for inspection.
+
+### What's needed to improve balance
+
+1. **Give Rapid a real identity** (highest priority — it's a dominated pick, not
+   a design trade-off). Options: a small splash radius (anti-swarm), an
+   anti-fast bonus, a much lower cost, or a far higher fire rate. Any one makes
+   the 4-tower roster a real choice.
+2. **Reconcile the HP/damage curves.** Either bend enemy HP super-linear past a
+   threshold *and* soften tower upgrade growth (additive past N levels), so
+   neither side runs away. Tune against measured clear-rates, not by feel.
+3. **Add anti-stack guardrails** (diminishing returns for repeated same-type
+   towers; Arc-network bonus softening) so Basic-spam and Arc-line-spam aren't
+   strictly optimal — see §2 "soft anti-stack balancing."
+4. **Scale a survival/utility lever with path count**, not just enemy HP, to fix
+   the late-game geometric losses (Roadmap Milestone C).
+5. **Instrument before tuning.** None of the above can be set confidently
+   without loss-wave / loss-reason / tower-usage telemetry. The STRESS TEST and
+   headless smoke test are the seed for a deterministic balance sim (Roadmap G).
+6. **Smooth reward spikes** from mutated elites (NEON = ×3 reward) per §3A.
+
+---
+
 ## 1. Core Idea Risk Review
 
 ### Strong Points

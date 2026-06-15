@@ -15,6 +15,7 @@ var _start_screen: Control
 var _game_over: Control
 var _hud_root: Control
 var _pause_menu: Control
+var _tech_screen: Control
 var _selection_panel: PanelContainer
 var _wave_intel: PanelContainer
 var _tutorial_box: Control
@@ -25,7 +26,8 @@ var _hint: Label
 var _wave_label: Label
 var _lives_label: Label
 var _credits_label: Label
-var _center_label: Label
+var _timer_label: Label
+var _enemies_label: Label
 var _fps_label: Label
 var _energy_bar: ProgressBar
 var _tower_buttons := {}
@@ -46,6 +48,7 @@ func _ready() -> void:
 	_build_hud()
 	_build_pause_menu()
 	_build_game_over()
+	_build_tech_screen()
 
 	State.phase_changed.connect(_on_phase_changed)
 	State.money_changed.connect(func(_v): _refresh_stats())
@@ -68,6 +71,12 @@ func _ready() -> void:
 # ---------------------------------------------------------------------------
 # Style helpers
 # ---------------------------------------------------------------------------
+
+## Expanding spacer — between stats-bar items it produces JS space-between.
+func _hspacer() -> Control:
+	var s := Control.new()
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return s
 
 func _label(text: String, size: int, color: Color) -> Label:
 	var l := Label.new()
@@ -106,6 +115,44 @@ func _panel(border: Color) -> PanelContainer:
 	style.set_content_margin_all(12)
 	p.add_theme_stylebox_override(&"panel", style)
 	return p
+
+## A two-column intel row: cyan label on the left, white value pushed right
+## (matches the JS wave-info-panel .intel-group layout).
+func _intel_row(label_text: String, value_text: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", 6)
+	row.add_child(_label(label_text, 9, C.COL_BLUE))
+	var val := _label(value_text, 9, Color.WHITE)
+	val.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row.add_child(val)
+	return row
+
+## A bordered enemy-distribution chip: colored dot + count
+## (matches the JS #intel-distribution .enemy-count-group chips).
+func _dist_chip(color: Color, count: int) -> PanelContainer:
+	var chip := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.25)
+	style.border_color = Color(C.COL_BLUE, 0.25)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	chip.add_theme_stylebox_override(&"panel", style)
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override(&"separation", 5)
+	chip.add_child(box)
+	var dot := ColorRect.new()
+	dot.color = color
+	dot.custom_minimum_size = Vector2(10, 10)
+	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	box.add_child(dot)
+	box.add_child(_label(str(count), 10, Color.WHITE))
+	return chip
 
 # ---------------------------------------------------------------------------
 # Start / game over screens
@@ -151,6 +198,7 @@ func _refresh_start_actions() -> void:
 			main.start_game()))
 	else:
 		actions.add_child(_button("INITIATE", C.COL_BLUE, main.start_game))
+	actions.add_child(_button("TECH TREE", C.COL_YELLOW, open_tech_tree))
 
 func _build_game_over() -> void:
 	_game_over = Control.new()
@@ -196,8 +244,10 @@ func _build_hud() -> void:
 	stats.offset_top = 8
 	_hud_root.add_child(stats)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override(&"separation", 18)
+	row.add_theme_constant_override(&"separation", 8)
 	stats.add_child(row)
+	# JS #stats-bar order, spread across the bar (space-between): WAVE ·
+	# NEXT WAVE · LIVES · CREDITS · ENEMIES · FPS · pause.
 	_wave_label = _label("WAVE: 1", 12, C.COL_BLUE)
 	var wave_btn := Button.new()
 	wave_btn.flat = true
@@ -206,22 +256,24 @@ func _build_hud() -> void:
 		_refresh_wave_intel())
 	_wave_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	wave_btn.add_child(_wave_label)
-	wave_btn.custom_minimum_size = Vector2(90, 0)
+	wave_btn.custom_minimum_size = Vector2(80, 0)
 	row.add_child(wave_btn)
+	row.add_child(_hspacer())
+	_timer_label = _label("", 12, C.COL_GREEN)
+	row.add_child(_timer_label)
+	row.add_child(_hspacer())
 	_lives_label = _label("LIVES: 20", 12, C.COL_BLUE)
 	row.add_child(_lives_label)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(spacer)
-	_center_label = _label("", 12, C.COL_GREEN)
-	row.add_child(_center_label)
-	var spacer2 := Control.new()
-	spacer2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(spacer2)
+	row.add_child(_hspacer())
 	_credits_label = _label("CREDITS: 100", 12, C.COL_YELLOW)
 	row.add_child(_credits_label)
+	row.add_child(_hspacer())
+	_enemies_label = _label("ENEMIES: 0", 12, C.COL_RED)
+	row.add_child(_enemies_label)
+	row.add_child(_hspacer())
 	_fps_label = _label("FPS: --", 11, Color(C.COL_BLUE, 0.7))
 	row.add_child(_fps_label)
+	row.add_child(_hspacer())
 	row.add_child(_button("II", C.COL_BLUE, main.toggle_pause))
 
 	# --- START WAVE ---
@@ -260,9 +312,11 @@ func _build_hud() -> void:
 	var ability_col := VBoxContainer.new()
 	ability_col.add_theme_constant_override(&"separation", 8)
 	abilities.add_child(ability_col)
-	ability_col.add_child(_button("EMP\n[1] 40⚡", C.COL_BLUE,
+	# Labels use plain ASCII — the bundled SystemFont can't render emoji like
+	# ⚡ (it rendered as tofu, especially on the web export).
+	ability_col.add_child(_button("EMP\n[1]  40 EN", C.COL_BLUE,
 			world.start_targeting.bind(&"emp")))
-	ability_col.add_child(_button("OVERCLOCK\n[2] 25⚡", C.COL_YELLOW,
+	ability_col.add_child(_button("OVERCLOCK\n[2]  25 EN", C.COL_YELLOW,
 			world.start_targeting.bind(&"overclock")))
 	ability_col.add_child(_label("ENERGY", 9, Color(C.COL_BLUE, 0.6)))
 	_energy_bar = ProgressBar.new()
@@ -272,12 +326,19 @@ func _build_hud() -> void:
 	ability_col.add_child(_energy_bar)
 
 	# --- Recenter (bottom right) ---
-	var recenter := _button("◎", C.COL_BLUE, main.recenter)
+	# Crosshair drawn in code (no font glyph — ◎ rendered as tofu).
+	var recenter := _button("", C.COL_BLUE, main.recenter)
+	recenter.custom_minimum_size = Vector2(44, 44)
 	recenter.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	recenter.offset_right = -16
 	recenter.offset_bottom = -16
 	recenter.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	recenter.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	recenter.draw.connect(func() -> void:
+		var c := recenter.size / 2.0
+		recenter.draw_arc(c, 9.0, 0, TAU, 24, C.COL_BLUE, 2.0)
+		recenter.draw_line(c - Vector2(13, 0), c + Vector2(13, 0), C.COL_BLUE, 2.0)
+		recenter.draw_line(c - Vector2(0, 13), c + Vector2(0, 13), C.COL_BLUE, 2.0))
 	_hud_root.add_child(recenter)
 
 	# --- Selection panel (bottom left) ---
@@ -291,7 +352,7 @@ func _build_hud() -> void:
 	_hud_root.add_child(_selection_panel)
 
 	# --- Wave intel (top left) ---
-	_wave_intel = _panel(Color(C.COL_BLUE, 0.7))
+	_wave_intel = _panel(Color(C.COL_PINK, 0.7))
 	_wave_intel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_wave_intel.offset_left = 8
 	_wave_intel.offset_top = 64
@@ -328,14 +389,11 @@ func _refresh_stats() -> void:
 	_lives_label.text = "LIVES: %d" % State.lives
 	_credits_label.text = "CREDITS: %d" % int(State.money)
 	_fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
-	if world.is_prep_phase:
-		_center_label.text = "NEXT WAVE: %ds" % ceili(world.prep_timer)
-		_center_label.add_theme_color_override(&"font_color", C.COL_GREEN)
-	elif State.is_wave_active:
-		_center_label.text = "ENEMIES: %d" % (world.enemies.size() + world.spawn_queue.size())
-		_center_label.add_theme_color_override(&"font_color", C.COL_RED)
-	else:
-		_center_label.text = ""
+	# NEXT WAVE shows only during prep (JS #timer-display); ENEMIES is always
+	# present (JS #enemy-info), counting live + queued.
+	_timer_label.text = ("NEXT WAVE: %ds" % ceili(world.prep_timer)) \
+			if world.is_prep_phase else ""
+	_enemies_label.text = "ENEMIES: %d" % (world.enemies.size() + world.spawn_queue.size())
 	var start_wave: Button = _hud_root.find_child("StartWave", true, false)
 	start_wave.visible = world.is_prep_phase
 	for type in _tower_buttons:
@@ -414,28 +472,29 @@ func _refresh_wave_intel() -> void:
 	_wave_intel.add_child(col)
 	var head := HBoxContainer.new()
 	col.add_child(head)
-	var title := _label("WAVE %d INTEL" % report.wave, 11, C.COL_BLUE)
+	var title := _label("WAVE INTELLIGENCE", 11, C.COL_PINK)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
-	head.add_child(_button("X", Color(1, 1, 1, 0.5), func():
+	head.add_child(_button("X", C.COL_BLUE, func():
 		_wave_intel_open = false
 		_refresh_wave_intel()))
-	var threat := _label("THREAT: %s" % report.threat, 10, report.threat_color)
-	col.add_child(threat)
-	col.add_child(_label("RIFTS: %d" % report.total_rifts, 10, Color.WHITE))
-	col.add_child(_label(report.mutation_status, 9, Color(1, 1, 1, 0.6)))
-	if not report.tags.is_empty():
-		var tag_text := ""
-		for tag in report.tags:
-			tag_text += "[%s] " % tag.label
-		col.add_child(_label(tag_text, 9, C.COL_YELLOW))
-	col.add_child(_label("EXPECTED HOSTILES", 9, Color(C.COL_BLUE, 0.6)))
-	var dist_text := ""
+	# Pink header underline (matches the JS .panel-header bottom border).
+	var rule := ColorRect.new()
+	rule.color = Color(C.COL_PINK, 0.3)
+	rule.custom_minimum_size = Vector2(0, 1)
+	col.add_child(rule)
+	col.add_child(_intel_row("RIFTS ACTIVE:", "%d" % report.total_rifts))
+	col.add_child(_intel_row("MUTATION POTENTIAL:", report.mutation_status))
+	col.add_child(_intel_row("THREAT LEVEL:", report.threat))
+	col.add_child(_label("ENEMY DISTRIBUTION:", 9, C.COL_BLUE))
+	var dist := HFlowContainer.new()
+	dist.add_theme_constant_override(&"h_separation", 8)
+	dist.add_theme_constant_override(&"v_separation", 6)
+	col.add_child(dist)
 	for type in WaveIntel.ORDER:
 		var count := int(report.distribution.get(type, 0))
 		if count > 0:
-			dist_text += "%s:%d  " % [String(type), count]
-	col.add_child(_label(dist_text, 9, Color.WHITE))
+			dist.add_child(_dist_chip(C.ENEMIES[type].color, count))
 
 # ---------------------------------------------------------------------------
 # Input guard
@@ -500,6 +559,7 @@ func refresh_pause_menu() -> void:
 	col.add_child(_button("RESET", C.COL_PINK, func():
 		main.toggle_pause()
 		main.reset_game()))
+	col.add_child(_button("TECH TREE", C.COL_YELLOW, open_tech_tree))
 	col.add_child(_label("SOUND", 9, Color(C.COL_BLUE, 0.5)))
 	col.add_child(_button("SOUND: %s" % ("OFF" if AudioEngine.muted else "ON"),
 			C.COL_GREEN if not AudioEngine.muted else Color(1, 1, 1, 0.4), func():
@@ -538,6 +598,117 @@ func refresh_pause_menu() -> void:
 	_build_command_center(col)
 
 # ---------------------------------------------------------------------------
+# Tech Tree screen (ROADMAP Milestone E / GAME_BALANCE_ANALYSIS section 5)
+# ---------------------------------------------------------------------------
+
+func _build_tech_screen() -> void:
+	_tech_screen = Control.new()
+	_tech_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tech_screen.visible = false
+	add_child(_tech_screen)
+	var bg := ColorRect.new()
+	bg.color = Color(C.COL_BG, 0.97)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tech_screen.add_child(bg)
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 28)
+	_tech_screen.add_child(margin)
+	var col := VBoxContainer.new()
+	col.name = "TechCol"
+	col.add_theme_constant_override(&"separation", 12)
+	margin.add_child(col)
+	Tech.changed.connect(func() -> void:
+		if _tech_screen.visible:
+			_refresh_tech_screen())
+
+func open_tech_tree() -> void:
+	_tech_screen.visible = true
+	_refresh_tech_screen()
+
+func close_tech_tree() -> void:
+	_tech_screen.visible = false
+
+func _refresh_tech_screen() -> void:
+	var col: VBoxContainer = _tech_screen.find_child("TechCol", true, false)
+	for child in col.get_children():
+		child.queue_free()
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override(&"separation", 16)
+	col.add_child(header)
+	header.add_child(_label("TECH TREE", 26, C.COL_BLUE))
+	var rp_label := _label("RESEARCH: %d RP" % Tech.rp, 14, C.COL_YELLOW)
+	rp_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	rp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	header.add_child(rp_label)
+	header.add_child(_button("CLOSE", C.COL_PINK, close_tech_tree))
+	col.add_child(_label(
+		"Spend Research Points on permanent upgrades. Earned each wave; progress carries across runs.",
+		9, Color(C.COL_BLUE, 0.5)))
+	var branch_row := HBoxContainer.new()
+	branch_row.add_theme_constant_override(&"separation", 14)
+	branch_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(branch_row)
+	for branch in Tech.BRANCHES:
+		branch_row.add_child(_build_branch_column(branch))
+
+func _branch_color(branch: String) -> Color:
+	match branch:
+		"OFFENSE": return C.COL_PINK
+		"CONTROL": return C.COL_BLUE
+		"ECONOMY": return C.COL_YELLOW
+		"CORE": return C.COL_GREEN
+	return C.COL_BLUE
+
+func _build_branch_column(branch: String) -> Control:
+	var bcol := VBoxContainer.new()
+	bcol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bcol.add_theme_constant_override(&"separation", 8)
+	var head := _label(branch, 13, _branch_color(branch))
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bcol.add_child(head)
+	for node in Tech.nodes_in_branch(branch):
+		bcol.add_child(_build_node_card(node))
+	return bcol
+
+func _build_node_card(node: Dictionary) -> Control:
+	var unlocked := Tech.is_unlocked(node.id)
+	var prereq_ok := Tech.prereq_met(node)
+	var affordable: bool = Tech.rp >= int(node.cost)
+	var border := Color(1, 1, 1, 0.12)
+	if unlocked:
+		border = C.COL_GREEN
+	elif prereq_ok and affordable:
+		border = C.COL_BLUE
+	elif prereq_ok:
+		border = Color(C.COL_YELLOW, 0.5)
+	var card := _panel(border)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override(&"separation", 3)
+	card.add_child(v)
+	var name_color := C.COL_GREEN if unlocked else (Color.WHITE if prereq_ok else Color(1, 1, 1, 0.4))
+	v.add_child(_label(node.name, 10, name_color))
+	var desc := _label(node.desc, 8, Color(1, 1, 1, 0.6 if prereq_ok else 0.3))
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.custom_minimum_size = Vector2(150, 0)
+	v.add_child(desc)
+	if unlocked:
+		v.add_child(_label("ACQUIRED", 8, C.COL_GREEN))
+	elif not prereq_ok:
+		v.add_child(_label("LOCKED  ·  %d RP" % int(node.cost), 8, Color(1, 1, 1, 0.35)))
+	else:
+		var btn := _button("UNLOCK  ·  %d RP" % int(node.cost),
+				C.COL_BLUE if affordable else Color(1, 1, 1, 0.4), func() -> void:
+			if Tech.unlock(node.id):
+				AudioEngine.play_sfx(&"build")
+				_refresh_tech_screen())
+		btn.disabled = not affordable
+		v.add_child(btn)
+	return card
+
+# ---------------------------------------------------------------------------
 # Command center (JS debug panel) — SHA-256-gated developer tools
 # ---------------------------------------------------------------------------
 
@@ -557,6 +728,12 @@ func _build_command_center(col: VBoxContainer) -> void:
 
 	col.add_child(_label("COMMAND CENTER", 9, C.COL_PINK))
 	col.add_child(_button("+1M CREDITS", C.COL_YELLOW, world.debug_add_money))
+	var rp_row := HBoxContainer.new()
+	rp_row.add_theme_constant_override(&"separation", 6)
+	col.add_child(rp_row)
+	rp_row.add_child(_button("+1 RP", C.COL_PINK, func(): Tech.grant_rp(1)))
+	rp_row.add_child(_button("+5 RP", C.COL_PINK, func(): Tech.grant_rp(5)))
+	rp_row.add_child(_button("+10 RP", C.COL_PINK, func(): Tech.grant_rp(10)))
 	var rift_row := HBoxContainer.new()
 	rift_row.add_theme_constant_override(&"separation", 6)
 	col.add_child(rift_row)

@@ -10,9 +10,12 @@ class StatsBar extends StatelessWidget {
     final ws = game.gameWorld.waveSystem;
     final state = game.state;
     final remaining = game.entities.enemies.length;
-    // The FPS readout is dropped on narrow (phone-landscape) widths so the
-    // top bar never overflows; there's room for it on tablet/desktop.
-    final showFps = MediaQuery.of(context).size.width >= 760;
+    // On narrow (phone-landscape) widths the bar can't hold every JS stat at
+    // once, so FPS is dropped and ENEMIES only shows while a wave is live
+    // (the timer takes its place during prep). Wide screens show the full
+    // JS order: WAVE · NEXT WAVE · LIVES · CREDITS · ENEMIES · FPS · pause.
+    final wide = MediaQuery.of(context).size.width >= 760;
+    final showEnemies = wide || state.isWaveActive.value;
 
     return SafeArea(
       child: Column(
@@ -32,38 +35,31 @@ class StatsBar extends StatelessWidget {
               ],
             ),
             child: Row(
+              // JS #stats-bar order: WAVE · NEXT WAVE · LIVES · CREDITS ·
+              // ENEMIES · FPS · pause, spread across the bar (space-between).
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Left: Wave + Lives
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  // JS: tapping the wave counter opens Wave Intel.
-                  GestureDetector(
-                    onTap: () => game.state.waveIntelOpen.value =
-                        !game.state.waveIntelOpen.value,
-                    child: _stat('WAVE', '${state.wave.value}'),
-                  ),
-                  const SizedBox(width: 20),
-                  _stat('LIVES', '${state.lives.value}'),
-                ]),
-                // Center: Timer or enemy count
+                // JS: tapping the wave counter opens Wave Intel.
+                GestureDetector(
+                  onTap: () => game.state.waveIntelOpen.value =
+                      !game.state.waveIntelOpen.value,
+                  child: _stat('WAVE', '${state.wave.value}'),
+                ),
                 if (ws.isPrepPhase)
                   _stat('NEXT WAVE', '${ws.prepTimer.ceil()}s',
                       color: const Color(0xFF00FF41))
-                else if (state.isWaveActive.value)
+                else
+                  const SizedBox.shrink(),
+                _stat('LIVES', '${state.lives.value}'),
+                _stat('CREDITS', '${state.money.value.toInt()}',
+                    color: const Color(0xFFFCEE0A)),
+                if (showEnemies)
                   _stat('ENEMIES', '$remaining',
                       color: const Color(0xFFFF4444)),
-                // Right: Credits + Pause
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  _stat('CREDITS', '${state.money.value.toInt()}',
-                      color: const Color(0xFFFCEE0A)),
-                  if (showFps) ...[
-                    const SizedBox(width: 12),
-                    _stat('FPS', '${game.fps.round()}',
-                        color: const Color(0xB300F3FF)),
-                  ],
-                  const SizedBox(width: 12),
-                  _pauseBtn(context),
-                ]),
+                if (wide)
+                  _stat('FPS', '${game.fps.round()}',
+                      color: const Color(0xB300F3FF)),
+                _pauseBtn(context),
               ],
             ),
           ),

@@ -56,11 +56,11 @@ class CoreBase extends PositionComponent
   double get upgradeCost => 200.0 * (level + 1);
 
   /// JS getRepairCost (01_init.js:493-497): $50 base, +$25 per life
-  /// bought beyond the starting 20.
+  /// bought beyond the starting 20. Tech CORE (Field Repairs) discounts it.
   double get repairCost {
     final lives = game.state.lives.value;
-    if (lives < 20) return 50;
-    return 50.0 + (lives - 20 + 1) * 25;
+    final base = lives < 20 ? 50.0 : 50.0 + (lives - 20 + 1) * 25;
+    return (base * game.tech.fx.repairCostMult).floorToDouble();
   }
 
   bool get canUpgrade => level < 10;
