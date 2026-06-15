@@ -70,10 +70,15 @@ class AbilitySystem extends Component {
     final g = gameWorld.game;
     g.state.energy.value -= kEmpCost;
 
+    // Tech CONTROL: Deep Freeze (radius +50%) and Cryo EMP (freeze +50%).
+    final fx = g.tech.fx;
+    final radius = kEmpRadius * fx.empRadiusMult;
+    final freezeFrames = (kEmpDurationFrames * fx.empFreezeMult).round();
+
     // Freeze all enemies in radius
     for (final enemy in g.entities.enemies) {
-      if (enemy.position.distanceTo(worldPos) <= kEmpRadius) {
-        enemy.freeze(kEmpDurationFrames);
+      if (enemy.position.distanceTo(worldPos) <= radius) {
+        enemy.freeze(freezeFrames);
       }
     }
 
@@ -160,17 +165,18 @@ class AbilitySystem extends Component {
   }
 
   void _renderEmpOverlay(Canvas canvas, Vector2 pos) {
-    // Radius circle
+    // Radius circle — reflects Tech CONTROL (Deep Freeze) blast-radius boost.
+    final radius = kEmpRadius * gameWorld.game.tech.fx.empRadiusMult;
     canvas.drawCircle(
       Offset(pos.x, pos.y),
-      kEmpRadius,
+      radius,
       Paint()
         ..color = const Color(0x3300F3FF)
         ..style = PaintingStyle.fill,
     );
     canvas.drawCircle(
       Offset(pos.x, pos.y),
-      kEmpRadius,
+      radius,
       Paint()
         ..color = const Color(0xCC00F3FF)
         ..style = PaintingStyle.stroke

@@ -101,6 +101,9 @@ class _PauseMenuState extends State<PauseMenu> {
                 game.overlays.remove('pauseMenu');
                 game.resetGame();
               }),
+              const SizedBox(height: 10),
+              _menuBtn('TECH TREE', _yellow,
+                  () => game.openTechTree('pauseMenu')),
               const SizedBox(height: 18),
               _soundRow(),
               const SizedBox(height: 12),

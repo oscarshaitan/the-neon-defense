@@ -14,6 +14,7 @@ import 'systems/ability_system.dart';
 import 'systems/hint_system.dart';
 import 'systems/placement_system.dart';
 import 'systems/save_system.dart';
+import 'systems/tech_tree.dart';
 import 'systems/tutorial_system.dart';
 
 class NeonDefenseGame extends FlameGame
@@ -30,6 +31,14 @@ class NeonDefenseGame extends FlameGame
   late PlacementSystem placement;
   late TutorialSystem tutorial;
   late HintSystem hints;
+
+  /// Tech Tree progression layer (RP + unlocked nodes), persisted in a store
+  /// separate from the per-run save so it carries across runs.
+  final TechTree tech = TechTree();
+
+  /// Once-per-run flag for the CORE capstone (Last Stand Protocol). Reset on
+  /// every fresh run (start/reset/continue).
+  bool lastStandUsed = false;
 
   final GameState state = GameState();
   final SelectionState selection = SelectionState();
@@ -75,6 +84,7 @@ class NeonDefenseGame extends FlameGame
     hints = HintSystem(this);
     await tutorial.loadCompletionFlag();
     await hints.loadSeen();
+    await tech.load(); // persistent tech progression (separate store)
     state.playerName = await saveSystem.loadPlayerName();
     await audio.init();
     camera = gameCamera.cameraComponent;
@@ -217,6 +227,25 @@ class NeonDefenseGame extends FlameGame
     selection.selectTowerType(type);
   }
 
+  /// Which overlay to restore when the Tech Tree screen closes (start screen
+  /// or pause menu). Null when the Tech Tree isn't open.
+  String? _techReturnOverlay;
+
+  /// Open the Tech Tree overlay from [fromOverlay] (e.g. 'startScreen' or
+  /// 'pauseMenu'); that overlay is hidden and restored on close.
+  void openTechTree(String fromOverlay) {
+    _techReturnOverlay = fromOverlay;
+    overlays.remove(fromOverlay);
+    overlays.add('techTree');
+  }
+
+  void closeTechTree() {
+    overlays.remove('techTree');
+    final back = _techReturnOverlay;
+    _techReturnOverlay = null;
+    if (back != null) overlays.add(back);
+  }
+
   void togglePause() {
     if (state.phase.value != GamePhase.playing) return;
     state.isPaused.value = !state.isPaused.value;
@@ -230,11 +259,22 @@ class NeonDefenseGame extends FlameGame
   }
 
   void startGame() {
+    _applyTechRunBonuses();
     state.phase.value = GamePhase.playing;
     overlays.remove('startScreen');
     overlays.add('hud');
     gameWorld.startPrepPhase();
     tutorial.maybeStart();
+  }
+
+  /// Tech Tree start-of-run bonuses (credits/lives/energy). Applied to the
+  /// fresh default state of a new run — never on the save-load path. Also
+  /// re-arms the once-per-run Last Stand capstone.
+  void _applyTechRunBonuses() {
+    state.money.value += tech.fx.startMoney;
+    state.lives.value += tech.fx.startLives;
+    state.energy.value += tech.fx.startEnergy;
+    lastStandUsed = false;
   }
 
   /// CONTINUE from the start screen: restore the save, then enter a prep
@@ -245,6 +285,7 @@ class NeonDefenseGame extends FlameGame
       startGame();
       return;
     }
+    lastStandUsed = false; // fresh run; capstone re-armed
     state.phase.value = GamePhase.playing;
     overlays.remove('startScreen');
     overlays.add('hud');
@@ -263,11 +304,12 @@ class NeonDefenseGame extends FlameGame
 
   void resetGame() {
     state.reset();
+    gameWorld.reset();
+    _applyTechRunBonuses();
     state.phase.value = GamePhase.playing;
     selection.clear();
     overlays.remove('gameOverScreen');
     overlays.add('hud');
-    gameWorld.reset();
     gameWorld.startPrepPhase();
   }
 }

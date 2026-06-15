@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'game/neon_defense_game.dart';
 import 'ui/screens/start_screen.dart';
 import 'ui/screens/game_over_screen.dart';
+import 'ui/screens/tech_tree_screen.dart';
 import 'ui/hud/stats_bar.dart';
 import 'ui/hud/tower_bar.dart';
 import 'ui/hud/abilities_bar.dart';
@@ -35,6 +36,8 @@ class NeonDefenseApp extends StatelessWidget {
             'gameOverScreen': (_, game) => GameOverScreen(game: game),
             'hud': (_, game) => _HudLayer(game: game),
             'pauseMenu': (_, game) => PauseMenu(game: game),
+            'techTree': (_, game) =>
+                TechTreeScreen(game: game, onClose: game.closeTechTree),
           };
 
   @override

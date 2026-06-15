@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 import '../../config/constants.dart';
 import '../../neon_defense_game.dart';
 import '../../systems/spatial_grid.dart';
+import '../../systems/tech_tree.dart';
 import '../../vfx/render_utils.dart';
 import '../../world/game_world.dart' show RenderLayers;
 import '../../world/hardpoint_manager.dart';
@@ -38,6 +39,14 @@ class Tower extends PositionComponent
 
   bool isSelected = false;
 
+  /// Guards the one-time Tech range multiplier in [onMount]. Saved towers
+  /// already carry their final range, so [markRestored] sets this to skip it.
+  bool _rangeBoosted = false;
+
+  /// Called by SaveSystem for towers restored from disk: their stats are
+  /// already final, so the build-time Tech range multiplier must not re-apply.
+  void markRestored() => _rangeBoosted = true;
+
   Tower({
     required Vector2 position,
     required this.type,
@@ -68,6 +77,13 @@ class Tower extends PositionComponent
   @override
   void onMount() {
     super.onMount();
+    // Tech OFFENSE (Extended Barrels): range multiplier applied once on build,
+    // mirroring Godot's def.range * Tech.fx.range_mult (clamped). Skipped for
+    // towers restored from a save, which already carry their final range.
+    if (!_rangeBoosted) {
+      _rangeBoosted = true;
+      range = (range * game.tech.fx.rangeMult).clamp(0, kMaxTowerRange);
+    }
     game.entities.towers.add(this);
     // Mark on actual (de)registration — Flame add/remove is deferred, so the
     // arc network must be recomputed once the registry truly changes.
@@ -161,6 +177,8 @@ class Tower extends PositionComponent
         intensity: bonus);
     target.takeDamage(damage);
     target.applyStaticCharge(bonus.toDouble());
+    // Tech CONTROL (Cryo Conductors): arc attacks chill enemies.
+    if (game.tech.fx.arcChill) target.chill = kTechChillFrames;
 
     final visited = <Enemy>{target};
     var fromX = target.position.x;
@@ -177,6 +195,7 @@ class Tower extends PositionComponent
           intensity: bonus);
       next.takeDamage(bounceDamage);
       next.applyStaticCharge(1.0);
+      if (game.tech.fx.arcChill) next.chill = kTechChillFrames;
       visited.add(next);
       fromX = next.position.x;
       fromY = next.position.y;
@@ -209,8 +228,16 @@ class Tower extends PositionComponent
   // Upgrades
   // ---------------------------------------------------------------------------
 
+  /// Tech effects, resolved safely. The economy getters below are also read by
+  /// detached towers in unit tests (no mounted game), where `game` would
+  /// assert; `findGame()` returns null instead, so we fall back to neutral
+  /// defaults (all multipliers 1.0, sell_refund 0.7).
+  TechEffects get _techFx =>
+      (findGame() as NeonDefenseGame?)?.tech.fx ?? TechEffects();
+
+  // JS getUpgradeCost, with Tech ECONOMY (Bulk Discount) multiplier applied.
   double get upgradeCost =>
-      (baseCost * 0.5 * level).floorToDouble(); // JS getUpgradeCost
+      (baseCost * 0.5 * level * _techFx.upgradeCostMult).floorToDouble();
 
   void upgrade() {
     final cost = upgradeCost; // capture before level++ (JS: getUpgradeCost called before level++)
@@ -220,8 +247,10 @@ class Tower extends PositionComponent
     totalCost += cost;
   }
 
+  // JS: Math.floor(totalCost * 0.7); Tech ECONOMY (Liquidation) raises the
+  // refund fraction (default 0.7, capped at 1.0 by the best unlocked node).
   double get sellValue =>
-      (totalCost * 0.7).floorToDouble(); // JS: Math.floor(totalCost * 0.7)
+      (totalCost * _techFx.sellRefund).floorToDouble();
 
   // ---------------------------------------------------------------------------
   // Rendering

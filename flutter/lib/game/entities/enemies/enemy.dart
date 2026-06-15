@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 import '../../config/constants.dart';
 import '../../neon_defense_game.dart';
 import '../../systems/spatial_grid.dart';
+import '../../systems/tech_tree.dart';
 import '../../vfx/render_utils.dart';
 import '../../world/game_world.dart' show RenderLayers;
 
@@ -106,6 +107,9 @@ class Enemy extends PositionComponent
   double staticCharges = 0;
   int staticStunTimer = 0;
   bool isInvisible = false;
+  // Tech CONTROL (Cryo Conductors): chilled enemies move at half speed for a
+  // limited number of frames. Distinct from `frozen` (full stop via EMP).
+  int chill = 0;
 
   Enemy({
     required this.type,
@@ -178,7 +182,18 @@ class Enemy extends PositionComponent
     final target = path[pathIndex];
     final diff = target - position;
     final dist = diff.length;
-    final step = speed; // world units per frame
+    var step = speed; // world units per frame
+
+    // Tech CONTROL (Cryo Conductors): chilled enemies crawl at 50% speed.
+    // Decrement here so the slow wears off; emits a frost trail like frozen.
+    if (chill > 0) {
+      chill--;
+      step *= kTechChillSlow;
+      if (game.state.frameCount % 16 == 0) {
+        game.gameWorld.particles.createParticles(
+            position.x, position.y, const Color(0xFF00F3FF), 1, priority: 0);
+      }
+    }
 
     if (dist <= step) {
       final oldPos = position.clone();
@@ -198,7 +213,15 @@ class Enemy extends PositionComponent
   }
 
   void takeDamage(double dmg) {
+    final fx = game.tech.fx;
+    dmg *= fx.dmgMult; // Tech OFFENSE: global tower damage
     if (isFrozen) dmg *= 1.2; // JS hitEnemy: frozen enemies take +20%
+    // Tech CONTROL (Thermal Weakness): chilled/frozen enemies take more.
+    if (isFrozen || chill > 0) dmg *= fx.thermalMult;
+    // Tech OFFENSE capstone (Executioner): finish low-HP targets.
+    if (fx.execute && maxHp > 0 && hp / maxHp <= kTechExecuteThreshold) {
+      dmg *= kTechExecuteBonus;
+    }
     hp -= dmg;
     if (hp <= 0) _die();
   }
@@ -218,7 +241,8 @@ class Enemy extends PositionComponent
   void _die() {
     isDead = true;
     // JS: money += reward; energy = Math.min(maxEnergy, energy + 1)
-    game.state.money.value += reward;
+    // Tech ECONOMY (Salvage Routines): reward multiplier.
+    game.state.money.value += reward * game.tech.fx.rewardMult;
     game.state.addEnergy(1.0);
     game.state.recordKill(type);
     // JS hitEnemy kill effects: 4 particles (priority 2) + light r60.
@@ -240,7 +264,16 @@ class Enemy extends PositionComponent
     game.state.startShake(20); // JS startShake(20) on core breach
     game.audio.playHit();
     if (game.state.lives.value <= 0) {
-      game.gameOver();
+      // Tech CORE capstone (Last Stand Protocol): survive once per run.
+      if (game.tech.fx.lastStand && !game.lastStandUsed) {
+        game.lastStandUsed = true;
+        game.state.lives.value = kTechLastStandLives;
+        game.state.showToast('LAST STAND PROTOCOL');
+        game.gameWorld.particles.createParticles(
+            position.x, position.y, const Color(0xFF00FF41), 30);
+      } else {
+        game.gameOver();
+      }
     }
     removeFromParent();
   }

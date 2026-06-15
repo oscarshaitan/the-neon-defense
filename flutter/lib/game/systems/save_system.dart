@@ -216,6 +216,7 @@ class SaveSystem {
             (tMap['totalCost'] as num?)?.toDouble() ?? kTowers[type]!.cost;
       final savedMaxCooldown = (tMap['maxCooldown'] as num?)?.toInt();
       if (savedMaxCooldown != null) tower.maxCooldown = savedMaxCooldown;
+      tower.markRestored(); // saved range is final; skip the build-time Tech mult
       gw.add(tower);
     }
 

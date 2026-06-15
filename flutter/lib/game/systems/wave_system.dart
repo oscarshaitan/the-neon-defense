@@ -180,6 +180,9 @@ class WaveSystem extends Component with HasGameReference {
   void _endWave() {
     final g = gameWorld.game;
     g.state.isWaveActive.value = false;
+    // Tech Tree: earn Research Points for the cleared wave (before it bumps).
+    final gain = g.tech.awardWave(g.state.wave.value);
+    if (gain > 0) g.state.showToast('+$gain RESEARCH');
     g.state.wave.value++;
     startPrepPhase();
     g.saveSystem.save(); // JS saves on wave completion
