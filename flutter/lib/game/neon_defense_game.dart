@@ -17,7 +17,11 @@ import 'systems/save_system.dart';
 import 'systems/tutorial_system.dart';
 
 class NeonDefenseGame extends FlameGame
-    with ScaleDetector, HasKeyboardHandlerComponents, TapCallbacks {
+    with
+        ScaleDetector,
+        ScrollDetector,
+        HasKeyboardHandlerComponents,
+        TapCallbacks {
   late GameWorld gameWorld;
   late GameCamera gameCamera;
   final AudioManager audio = AudioManager();
@@ -117,6 +121,14 @@ class NeonDefenseGame extends FlameGame
   @override
   void onScaleUpdate(ScaleUpdateInfo info) {
     gameCamera.onScaleUpdate(info);
+  }
+
+  @override
+  void onScroll(PointerScrollInfo info) {
+    final dy = info.scrollDelta.global.y;
+    if (dy == 0) return;
+    // Wheel up (negative dy) zooms in; matches the JS wheel zoom.
+    gameCamera.zoomBy(dy < 0 ? 1.1 : 1 / 1.1, info.eventPosition.global);
   }
 
   @override

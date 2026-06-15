@@ -101,7 +101,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			_handle_key(event.keycode)
 
 func _zoom_at(factor: float, _screen_pos: Vector2) -> void:
-	var z := clampf(camera.zoom.x * factor, 0.1, 1.0)
+	# Max 2.0 (not 1.0): the 1280x720 viewport frames more world at zoom 1 than
+	# the JS/Flutter canvases, so extra zoom-in headroom is needed to get as
+	# close to the towers as those editions.
+	var z := clampf(camera.zoom.x * factor, 0.1, 2.0)
 	camera.zoom = Vector2(z, z)
 
 func recenter() -> void:

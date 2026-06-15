@@ -25,6 +25,9 @@ window/handheld/orientation=4
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+; Match the JS/Flutter near-black background (C.COL_BG "050510") instead of
+; Godot's default gray clear color.
+environment/defaults/default_clear_color=Color(0.0196078, 0.0196078, 0.0627451, 1)
 
 [input_devices]
 

@@ -1156,16 +1156,20 @@ window.debugStressTest = function () {
     const coreR = Math.floor(core.y / GRID_SIZE);
 
     let placed = 0;
-    // Contiguous arc block first (adjacent arc towers link into a network).
-    for (let dr = 6; dr <= 11; dr++) {
-        for (let dc = 6; dc <= 11; dc++) {
+    // Connected arc cluster hugging the core (contiguous -> links), close to
+    // where the rifts converge so the towers are actually in the fight.
+    for (let dr = 3; dr <= 7; dr++) {
+        for (let dc = 3; dc <= 7; dc++) {
             if (_stressPlaceTower(coreC + dc, coreR + dr, 'arc')) placed++;
         }
     }
+    // Pack the other tower types into a tight ring AROUND the core (all valid
+    // tiles within 8 cells) so every rift's final approach runs a gauntlet.
     const others = ['basic', 'rapid', 'sniper'];
-    for (let dr = -22; dr <= 22 && placed < 110; dr++) {
-        for (let dc = -22; dc <= 22 && placed < 110; dc++) {
-            if (dr >= 6 && dr <= 11 && dc >= 6 && dc <= 11) continue;
+    for (let dr = -8; dr <= 8 && placed < 200; dr++) {
+        for (let dc = -8; dc <= 8 && placed < 200; dc++) {
+            if (dr === 0 && dc === 0) continue; // leave the core cell for the base
+            if (dr >= 3 && dr <= 7 && dc >= 3 && dc <= 7) continue;
             if (_stressPlaceTower(coreC + dc, coreR + dr,
                 others[(Math.abs(dr) + Math.abs(dc)) % others.length])) placed++;
         }
