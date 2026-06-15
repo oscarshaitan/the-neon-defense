@@ -454,6 +454,7 @@ func _step_enemies() -> void:
 
 func _enemy_reached_core(e: Enemy, index: int) -> void:
 	_grid_remove(e)
+	e.dead = true # let in-flight projectiles drop this target in O(1)
 	enemies.remove_at(index)
 	State.lives -= 1
 	State.start_shake(20.0)
@@ -656,7 +657,7 @@ func _step_projectiles() -> void:
 	var i := projectiles.size() - 1
 	while i >= 0:
 		var p := projectiles[i]
-		if p.target == null or p.target.dead or not enemies.has(p.target):
+		if p.target == null or p.target.dead:
 			projectiles.remove_at(i)
 			i -= 1
 			continue

@@ -291,19 +291,16 @@ class DynamicLayer extends Node2D:
 				draw_colored_polygon(hex, color)
 				draw_circle(pos, 4.0 * s, Color("e9f9ff"))
 
+	# Compact numeric level badge. (Was one pip per level — at level 100+ that was
+	# hundreds of overlapping shapes per tower: a visual mess and a perf sink.)
 	func _draw_level_pips(level: int, at: Vector2) -> void:
-		var fives := level / 5
-		var ones := level % 5
-		var total_w := fives * 8.0 + ones * 4.0 + maxf(0, fives + ones - 1) * 5.0
-		var x := at.x - total_w / 2
-		for i in fives:
-			var cx := x + 4.0
-			draw_colored_polygon(PackedVector2Array([Vector2(cx, at.y - 4), Vector2(cx + 4, at.y),
-					Vector2(cx, at.y + 4), Vector2(cx - 4, at.y)]), Color.WHITE)
-			x += 13.0
-		for i in ones:
-			draw_circle(Vector2(x + 2.0, at.y), 2.0, Color.WHITE)
-			x += 9.0
+		var font := ThemeDB.fallback_font
+		var txt := str(level)
+		var fs := 12
+		var w: float = font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var p := Vector2(at.x - w / 2.0, at.y + 6.0)
+		draw_string(font, p + Vector2(1, 1), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.7))
+		draw_string(font, p, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
 
 	func _draw_enemies(frame: int) -> void:
 		for e in world.enemies:
@@ -343,9 +340,27 @@ class DynamicLayer extends Node2D:
 				draw_rect(Rect2(e.pos + Vector2(-10, -15), Vector2(20, 3)), Color.RED)
 				draw_rect(Rect2(e.pos + Vector2(-10, -15),
 						Vector2(20.0 * clampf(e.hp / e.max_hp, 0, 1), 3)), Color.GREEN)
+			# Frozen (EMP): icy crystal spikes around the body — a debuff, not a
+			# solid "shield" bubble.
 			if e.frozen > 0:
-				draw_arc(e.pos, e.width / 2 + 2, 0, TAU, 20, C.COL_BLUE, 3.0)
-				draw_circle(e.pos, e.width / 2, Color(C.COL_BLUE, 0.3))
+				var r: float = e.width / 2.0
+				for i in 5:
+					var a := TAU * i / 5.0 - PI / 2.0
+					var dirv := Vector2(cos(a), sin(a))
+					var perp := Vector2(-dirv.y, dirv.x)
+					draw_colored_polygon(PackedVector2Array([
+							e.pos + dirv * (r + 6.0),
+							e.pos + dirv * r + perp * 3.0,
+							e.pos + dirv * r - perp * 3.0]), Color("bfefff"))
+				draw_arc(e.pos, r + 2.0, 0, TAU, 18, Color(C.COL_BLUE, 0.7), 1.5)
+			# Arc chill (slowed, not stopped): a couple of small frost ticks.
+			elif e.chill > 0:
+				var rc: float = e.width / 2.0 + 3.0
+				for i in 3:
+					var a := TAU * i / 3.0 + frame * 0.03
+					var d := Vector2(cos(a), sin(a))
+					draw_line(e.pos + d * (rc - 3.0), e.pos + d * (rc + 3.0),
+							Color(C.COL_BLUE, 0.8), 2.0)
 			if e.stun > 0:
 				var r := e.width / 2 + 8
 				var pulse := 1.0 + sin(frame * 0.35 + e.pos.x * 0.01) * 0.12

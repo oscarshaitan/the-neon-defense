@@ -21,7 +21,7 @@ var _tech_canvas: Control
 var _tech_zoom := 1.0
 var _tech_hover_label: Label
 var _tech_stats_label: Label
-const _TECH_KIND_SIZE := {"start": 34.0, "small": 30.0, "notable": 48.0, "keystone": 60.0}
+const _TECH_KIND_SIZE := {"start": 34.0, "small": 28.0, "big": 54.0, "capstone": 68.0}
 var _selection_panel: PanelContainer
 var _wave_intel: PanelContainer
 var _tutorial_box: Control
@@ -613,9 +613,24 @@ func _build_tech_screen() -> void:
 	_tech_screen.visible = false
 	add_child(_tech_screen)
 	var bg := ColorRect.new()
-	bg.color = Color(C.COL_BG, 0.98)
+	bg.color = Color(C.COL_BG, 0.99)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_tech_screen.add_child(bg)
+	# Soft radial glow behind the web for depth.
+	var grad := Gradient.new()
+	grad.set_color(0, Color(C.COL_BLUE, 0.13))
+	grad.set_color(1, Color(C.COL_BG, 0.0))
+	var gtex := GradientTexture2D.new()
+	gtex.gradient = grad
+	gtex.fill = GradientTexture2D.FILL_RADIAL
+	gtex.fill_from = Vector2(0.5, 0.5)
+	gtex.fill_to = Vector2(1.05, 0.5)
+	var glow := TextureRect.new()
+	glow.texture = gtex
+	glow.set_anchors_preset(Control.PRESET_FULL_RECT)
+	glow.stretch_mode = TextureRect.STRETCH_SCALE
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tech_screen.add_child(glow)
 	# Pannable / zoomable viewport that clips the node web.
 	_tech_viewport = Control.new()
 	_tech_viewport.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -690,6 +705,11 @@ func _build_tech_screen() -> void:
 	Tech.changed.connect(func() -> void:
 		if _tech_screen.visible:
 			_refresh_tech_screen())
+	Tech.research_complete.connect(_on_research_complete)
+
+func _on_research_complete() -> void:
+	State.show_toast("RESEARCH COMPLETE — GRID MASTERED")
+	AudioEngine.play_sfx(&"build")
 
 func open_tech_tree() -> void:
 	_tech_screen.visible = true
@@ -728,8 +748,12 @@ func _branch_color(branch: String) -> Color:
 func _refresh_tech_screen() -> void:
 	var rp_label: Label = _tech_screen.find_child("RP", true, false)
 	if rp_label:
-		rp_label.text = "RESEARCH: %d RP   ·   allocated %d / %d" % [
-				Tech.rp, Tech.allocated.size() - 1, Tech.nodes.size() - 1]
+		if Tech.is_complete():
+			rp_label.text = "RESEARCH COMPLETE — GRID MASTERED   ·   %d RP banked" % Tech.rp
+			rp_label.add_theme_color_override(&"font_color", C.COL_GREEN)
+		else:
+			rp_label.text = "RESEARCH: %d RP   ·   allocated %d / %d" % [
+					Tech.rp, Tech.allocated.size() - 1, Tech.nodes.size() - 1]
 	for child in _tech_canvas.get_children():
 		child.queue_free()
 	# Links first (rendered under the node buttons), de-duplicated.
@@ -761,10 +785,10 @@ func _tech_hover(node: Dictionary) -> void:
 		return
 	var status := "ALLOCATED"
 	if not Tech.is_allocated(node.id):
-		if Tech._excluded_blocked(node):
-			status = "LOCKED OUT (exclusive)"
-		elif Tech.can_allocate(node):
+		if Tech.can_allocate(node):
 			status = "AVAILABLE  ·  %d RP" % int(node.cost)
+		elif Tech.is_reachable(node) and not Tech.ring_complete(node):
+			status = "ALLOCATE THE WHOLE RING FIRST  ·  %d RP" % int(node.cost)
 		elif Tech.is_reachable(node):
 			status = "NEED %d RP" % int(node.cost)
 		else:
@@ -776,9 +800,12 @@ func _tech_link(a: Dictionary, b: Dictionary) -> Line2D:
 	var line := Line2D.new()
 	line.add_point(a.pos * Tech.GRID_SPACING)
 	line.add_point(b.pos * Tech.GRID_SPACING)
+	var branch: String = a.branch if a.branch != "" else b.branch
+	var col := _branch_color(branch)
 	var both: bool = Tech.is_allocated(a.id) and Tech.is_allocated(b.id)
-	line.width = 3.0 if both else 2.0
-	line.default_color = Color(C.COL_BLUE, 0.85) if both else Color(1, 1, 1, 0.12)
+	line.width = 4.0 if both else 2.0
+	line.default_color = Color(col, 0.95) if both else Color(col, 0.16)
+	line.joint_mode = Line2D.LINE_JOINT_ROUND
 	return line
 
 func _tech_node_button(node: Dictionary) -> Button:
@@ -791,23 +818,27 @@ func _tech_node_button(node: Dictionary) -> Button:
 	btn.tooltip_text = "%s\n%s\n%s" % [node.name, node.desc,
 			"ALLOCATED" if Tech.is_allocated(node.id) else "%d RP" % int(node.cost)]
 	var col := _branch_color(node.branch) if node.branch != "" else C.COL_BLUE
+	var is_cap: bool = node.kind == "capstone"
+	var is_major: bool = is_cap or node.kind == "big"
 	var allocated := Tech.is_allocated(node.id)
 	var can := Tech.can_allocate(node)
+	var accent := Color(1.0, 0.86, 0.36) if is_cap else col # capstones read gold
 	var style := StyleBoxFlat.new()
-	style.set_corner_radius_all(4 if node.kind == "keystone" else int(sz / 2.0))
-	style.set_border_width_all(2)
+	style.set_corner_radius_all(8 if is_cap else int(sz / 2.0)) # capstone = rounded square
+	style.set_border_width_all(4 if is_major else 2)
 	if allocated:
-		style.bg_color = Color(col, 0.85)
+		style.bg_color = Color(accent, 0.92)
 		style.border_color = Color.WHITE
 	elif can:
-		style.bg_color = Color(col, 0.3)
-		style.border_color = col
+		# Ready to take — bright outline (extra pop for a completed ring's big node).
+		style.bg_color = Color(accent, 0.34)
+		style.border_color = accent
 	elif Tech.is_reachable(node):
-		style.bg_color = Color(0, 0, 0, 0.45)
-		style.border_color = Color(col, 0.45)
+		style.bg_color = Color(0, 0, 0, 0.5)
+		style.border_color = Color(accent, 0.4)
 	else:
-		style.bg_color = Color(0, 0, 0, 0.45)
-		style.border_color = Color(1, 1, 1, 0.12)
+		style.bg_color = Color(0, 0, 0, 0.5)
+		style.border_color = Color(1, 1, 1, 0.1)
 	btn.add_theme_stylebox_override(&"normal", style)
 	btn.add_theme_stylebox_override(&"hover", style)
 	btn.add_theme_stylebox_override(&"pressed", style)
