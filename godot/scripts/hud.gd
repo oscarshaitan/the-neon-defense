@@ -260,9 +260,11 @@ func _build_hud() -> void:
 	var ability_col := VBoxContainer.new()
 	ability_col.add_theme_constant_override(&"separation", 8)
 	abilities.add_child(ability_col)
-	ability_col.add_child(_button("EMP\n[1] 40⚡", C.COL_BLUE,
+	# Labels use plain ASCII — the bundled SystemFont can't render emoji like
+	# ⚡ (it rendered as tofu, especially on the web export).
+	ability_col.add_child(_button("EMP\n[1]  40 EN", C.COL_BLUE,
 			world.start_targeting.bind(&"emp")))
-	ability_col.add_child(_button("OVERCLOCK\n[2] 25⚡", C.COL_YELLOW,
+	ability_col.add_child(_button("OVERCLOCK\n[2]  25 EN", C.COL_YELLOW,
 			world.start_targeting.bind(&"overclock")))
 	ability_col.add_child(_label("ENERGY", 9, Color(C.COL_BLUE, 0.6)))
 	_energy_bar = ProgressBar.new()
@@ -272,12 +274,19 @@ func _build_hud() -> void:
 	ability_col.add_child(_energy_bar)
 
 	# --- Recenter (bottom right) ---
-	var recenter := _button("◎", C.COL_BLUE, main.recenter)
+	# Crosshair drawn in code (no font glyph — ◎ rendered as tofu).
+	var recenter := _button("", C.COL_BLUE, main.recenter)
+	recenter.custom_minimum_size = Vector2(44, 44)
 	recenter.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	recenter.offset_right = -16
 	recenter.offset_bottom = -16
 	recenter.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	recenter.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	recenter.draw.connect(func() -> void:
+		var c := recenter.size / 2.0
+		recenter.draw_arc(c, 9.0, 0, TAU, 24, C.COL_BLUE, 2.0)
+		recenter.draw_line(c - Vector2(13, 0), c + Vector2(13, 0), C.COL_BLUE, 2.0)
+		recenter.draw_line(c - Vector2(0, 13), c + Vector2(0, 13), C.COL_BLUE, 2.0))
 	_hud_root.add_child(recenter)
 
 	# --- Selection panel (bottom left) ---
