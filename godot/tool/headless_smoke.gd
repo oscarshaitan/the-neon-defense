@@ -141,34 +141,30 @@ func _run() -> void:
 		total10 += w10[type]
 	_check(total10 == 31, "wave 10 predicts 31 hostiles")
 
-	# --- Tech Tree (Milestone E, v3 procedural PoE-style web) ---
+	# --- Tech Tree (Milestone E, v4 planar cluster web) ---
 	var T = root.get_node("/root/Tech")
 	_check(T != null, "Tech autoload present")
 	T.reset_progress()
 	_check(T.nodes.size() >= 150, "massive tree (>= 150 nodes): %d" % T.nodes.size())
 	_check(T.total_tree_cost() >= 250,
-			"tree far too big to fully fill (endless): total cost %d" % T.total_tree_cost())
+			"tree very large (endless to fully clear): total cost %d" % T.total_tree_cost())
 	_check(absf(float(T.fx.dmg_mult) - 1.0) < 0.001, "default damage mult = 1.0")
-	# Count keystones + exclusive pairs in the generated graph.
-	var keystones: Array = []
-	var excl_pairs := 0
+	var caps := 0
+	var bigs := 0
 	for n in T.nodes:
-		if n.kind == "keystone":
-			keystones.append(n.id)
-			if not n.excludes.is_empty():
-				excl_pairs += 1
-	_check(keystones.size() == 10, "10 rim keystones: %d" % keystones.size())
-	_check(excl_pairs == 10, "every keystone is in an exclusive pair: %d" % excl_pairs)
-	# Path-based allocation: an interior hub is gated until you path to it.
+		if n.kind == "capstone":
+			caps += 1
+		elif n.kind == "big":
+			bigs += 1
+	_check(caps == 8, "8 branch-tip capstones: %d" % caps)
+	_check(bigs >= 8, "cluster big nodes present: %d" % bigs)
+	# Watch for the endgame signal (whole tree allocated).
+	var fired := [false]
+	T.research_complete.connect(func() -> void: fired[0] = true)
+	# Greedy flood. With no exclusivity, EVERYTHING is reachable/takeable, and big
+	# nodes only unlock after their full ring — so full coverage also proves both
+	# connectivity (no orphans) and the ring-gating resolves.
 	T.grant_rp(100000)
-	var deep_locked := false
-	for n in T.nodes:
-		if n.kind == "keystone" and not T.can_allocate(n):
-			deep_locked = true
-			break
-	_check(deep_locked, "rim keystones are gated until you path to them")
-	# Greedy flood: allocate everything reachable. A disconnected node could
-	# never be allocated, so full coverage proves connectivity (no orphans).
 	var progress := true
 	while progress:
 		progress = false
@@ -176,31 +172,31 @@ func _run() -> void:
 			if T.can_allocate(n):
 				T.allocate(n.id)
 				progress = true
-	# Exactly one keystone per exclusive pair stays unallocated (5 pairs -> 5 losers).
-	_check(T.allocated.size() == T.nodes.size() - 5,
-			"all nodes reachable; 5 exclusive losers remain (%d / %d)"
-			% [T.allocated.size(), T.nodes.size()])
-	var ks_allocated := 0
-	for id in keystones:
-		if T.is_allocated(id):
-			ks_allocated += 1
-	_check(ks_allocated == 5, "exactly one keystone per pair allocated: %d" % ks_allocated)
+	_check(T.allocated.size() == T.nodes.size(),
+			"every node reachable & allocatable (%d / %d)" % [T.allocated.size(), T.nodes.size()])
+	_check(T.is_complete() and fired[0], "research_complete fires when the tree is finished")
 	_check(not T.stat_summary().is_empty(), "stat summary reports cumulative bonuses")
 	# Start-of-run bonuses apply on a fresh run.
 	main.reset_game()
 	_check(S.money > Con.STARTING_MONEY, "tech start credits applied on reset (%d)" % int(S.money))
-	# Refund: full respec returns to just START with all RP back.
-	var rp_after_flood: int = T.rp
-	T.refund_all()
-	_check(T.allocated.size() == 1 and T.rp > rp_after_flood, "REFUND ALL respecs to START")
-	# Persistence round trip (carries across runs).
-	T.grant_rp(50)
-	var first := ""
+	# Big-node ring gating: refund a big + one of its ring pips, and it locks
+	# until the ring is whole again.
+	var big_id := ""
 	for n in T.nodes:
-		if n.neighbors.has(T.START_ID):
-			first = n.id
+		if n.kind == "big":
+			big_id = n.id
 			break
-	_check(first != "" and T.allocate(first), "allocate a START-adjacent node")
+	_check(T.refund(big_id), "refund a big node")
+	var pip := ""
+	for nb in T.by_id[big_id].neighbors:
+		if T.can_refund(nb):
+			pip = nb
+			break
+	_check(pip != "" and T.refund(pip), "refund one ring pip of that cluster")
+	_check(not T.can_allocate(T.by_id[big_id]), "big node gated until its whole ring is allocated")
+	_check(T.allocate(pip), "re-allocate the ring pip")
+	_check(T.can_allocate(T.by_id[big_id]), "big node unlocks once the ring is complete")
+	# Persistence round trip (carries across runs).
 	T._save()
 	var saved_rp: int = T.rp
 	var saved_count: int = T.allocated.size()
@@ -209,8 +205,11 @@ func _run() -> void:
 	T._load()
 	T._recompute()
 	_check(T.rp == saved_rp, "tech RP survives save/load")
-	_check(T.allocated.size() == saved_count and T.is_allocated(first),
+	_check(T.allocated.size() == saved_count and T.is_allocated(pip),
 			"tech allocations survive save/load")
+	# Refund all -> back to just START.
+	T.refund_all()
+	_check(T.allocated.size() == 1, "REFUND ALL respecs to START")
 	T.reset_progress() # leave persistent state clean
 
 	if _failures.is_empty():
