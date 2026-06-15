@@ -34,12 +34,38 @@ jobs:
           # Use relative base-href so the app works at any served path
           sed -i 's|<base href="/">|<base href="./">|g' build/web/index.html
 
+      # ── Godot web export ───────────────────────────────────────────────────
+      # Export the Godot build from source on every deploy so it can't drift
+      # behind the committed scripts (the cause of the Tech Tree being missing
+      # from the deployed build). Pinned to 4.3-stable to match project.godot.
+      - name: Install Godot 4.3 + export templates
+        run: |
+          GODOT=4.3-stable
+          wget -qO /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT}/Godot_v${GODOT}_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d /tmp
+          sudo mv "/tmp/Godot_v${GODOT}_linux.x86_64" /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+          wget -qO /tmp/templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT}/Godot_v${GODOT}_export_templates.tpz"
+          unzip -q /tmp/templates.tpz -d /tmp/tpl
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.3.stable"
+          mv /tmp/tpl/templates/* "$HOME/.local/share/godot/export_templates/4.3.stable/"
+
+      - name: Build Godot web
+        working-directory: godot
+        run: |
+          mkdir -p build/web
+          # First headless run imports resources (.godot cache); its recoverable
+          # warnings are non-fatal, so export on the second run.
+          godot --headless --import 2>&1 || true
+          godot --headless --export-release "Web" build/web/index.html
+          test -f build/web/index.pck  # fail the build if the export didn't produce a pck
+
       # ── Assemble deploy folder ─────────────────────────────────────────────
       # Structure served by GitHub Pages:
       #   /                        → landing page
       #   /js/                     → JS game
       #   /flutter/build/web/      → Flutter web build (relative base-href)
-      #   /godot/build/web/        → Godot web export (committed, no-threads)
+      #   /godot/build/web/        → Godot web export (built above, no-threads)
       - name: Assemble site
         run: |
           mkdir -p _site/js _site/flutter/build/web _site/godot/build/web _site/assets
