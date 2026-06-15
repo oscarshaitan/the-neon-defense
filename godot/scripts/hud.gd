@@ -16,6 +16,10 @@ var _game_over: Control
 var _hud_root: Control
 var _pause_menu: Control
 var _tech_screen: Control
+var _tech_viewport: Control
+var _tech_canvas: Control
+var _tech_zoom := 1.0
+const _TECH_KIND_SIZE := {"start": 34.0, "small": 30.0, "notable": 48.0, "keystone": 60.0}
 var _selection_panel: PanelContainer
 var _wave_intel: PanelContainer
 var _tutorial_box: Control
@@ -607,52 +611,77 @@ func _build_tech_screen() -> void:
 	_tech_screen.visible = false
 	add_child(_tech_screen)
 	var bg := ColorRect.new()
-	bg.color = Color(C.COL_BG, 0.97)
+	bg.color = Color(C.COL_BG, 0.98)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_tech_screen.add_child(bg)
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 28)
-	_tech_screen.add_child(margin)
-	var col := VBoxContainer.new()
-	col.name = "TechCol"
-	col.add_theme_constant_override(&"separation", 12)
-	margin.add_child(col)
+	# Pannable / zoomable viewport that clips the node web.
+	_tech_viewport = Control.new()
+	_tech_viewport.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tech_viewport.clip_contents = true
+	_tech_viewport.mouse_filter = Control.MOUSE_FILTER_STOP
+	_tech_viewport.gui_input.connect(_on_tech_pan_input)
+	_tech_screen.add_child(_tech_viewport)
+	_tech_canvas = Control.new()
+	_tech_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tech_viewport.add_child(_tech_canvas)
+	# Header overlay.
+	var header := HBoxContainer.new()
+	header.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	header.offset_left = 16
+	header.offset_top = 12
+	header.offset_right = -16
+	header.add_theme_constant_override(&"separation", 12)
+	_tech_screen.add_child(header)
+	header.add_child(_label("TECH TREE", 22, C.COL_BLUE))
+	var rp := _label("", 13, C.COL_YELLOW)
+	rp.name = "RP"
+	rp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rp.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	header.add_child(rp)
+	header.add_child(_button("+", C.COL_BLUE, func() -> void: _tech_set_zoom(_tech_zoom * 1.2)))
+	header.add_child(_button("-", C.COL_BLUE, func() -> void: _tech_set_zoom(_tech_zoom / 1.2)))
+	header.add_child(_button("REFUND ALL", C.COL_YELLOW, func() -> void:
+		Tech.refund_all()
+		AudioEngine.play_sfx(&"build")))
+	header.add_child(_button("CLOSE", C.COL_PINK, close_tech_tree))
+	# Footer hint.
+	var hint := _label(
+		"Drag to pan · scroll or +/- to zoom · click a lit node to allocate · click an outer node to refund",
+		9, Color(C.COL_BLUE, 0.5))
+	hint.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	hint.offset_left = 16
+	hint.offset_top = -22
+	hint.offset_bottom = -8
+	_tech_screen.add_child(hint)
 	Tech.changed.connect(func() -> void:
 		if _tech_screen.visible:
 			_refresh_tech_screen())
 
 func open_tech_tree() -> void:
 	_tech_screen.visible = true
+	# Center START in the viewport and reset zoom each open.
+	var vp := _tech_viewport.size
+	if vp == Vector2.ZERO:
+		vp = get_viewport().get_visible_rect().size
+	_tech_canvas.position = vp * 0.5
+	_tech_set_zoom(1.0)
 	_refresh_tech_screen()
 
 func close_tech_tree() -> void:
 	_tech_screen.visible = false
 
-func _refresh_tech_screen() -> void:
-	var col: VBoxContainer = _tech_screen.find_child("TechCol", true, false)
-	for child in col.get_children():
-		child.queue_free()
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override(&"separation", 16)
-	col.add_child(header)
-	header.add_child(_label("TECH TREE", 26, C.COL_BLUE))
-	var rp_label := _label("RESEARCH: %d RP" % Tech.rp, 14, C.COL_YELLOW)
-	rp_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	rp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	header.add_child(rp_label)
-	header.add_child(_button("CLOSE", C.COL_PINK, close_tech_tree))
-	col.add_child(_label(
-		"Spend Research Points on permanent upgrades. Earned each wave; progress carries across runs.",
-		9, Color(C.COL_BLUE, 0.5)))
-	var branch_row := HBoxContainer.new()
-	branch_row.add_theme_constant_override(&"separation", 14)
-	branch_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(branch_row)
-	for branch in Tech.BRANCHES:
-		branch_row.add_child(_build_branch_column(branch))
+func _tech_set_zoom(z: float) -> void:
+	_tech_zoom = clampf(z, 0.45, 1.8)
+	_tech_canvas.scale = Vector2(_tech_zoom, _tech_zoom)
+
+func _on_tech_pan_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_LEFT):
+		_tech_canvas.position += event.relative
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_tech_set_zoom(_tech_zoom * 1.1)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_tech_set_zoom(_tech_zoom / 1.1)
 
 func _branch_color(branch: String) -> Color:
 	match branch:
@@ -662,51 +691,80 @@ func _branch_color(branch: String) -> Color:
 		"CORE": return C.COL_GREEN
 	return C.COL_BLUE
 
-func _build_branch_column(branch: String) -> Control:
-	var bcol := VBoxContainer.new()
-	bcol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bcol.add_theme_constant_override(&"separation", 8)
-	var head := _label(branch, 13, _branch_color(branch))
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bcol.add_child(head)
-	for node in Tech.nodes_in_branch(branch):
-		bcol.add_child(_build_node_card(node))
-	return bcol
+func _refresh_tech_screen() -> void:
+	var rp_label: Label = _tech_screen.find_child("RP", true, false)
+	if rp_label:
+		rp_label.text = "RESEARCH: %d RP   ·   allocated %d / %d" % [
+				Tech.rp, Tech.allocated.size() - 1, Tech.nodes.size() - 1]
+	for child in _tech_canvas.get_children():
+		child.queue_free()
+	# Links first (rendered under the node buttons), de-duplicated.
+	var drawn := {}
+	for node in Tech.nodes:
+		for nb in node.neighbors:
+			if not Tech.by_id.has(nb):
+				continue
+			var key: String = (node.id + "|" + nb) if node.id < nb else (nb + "|" + node.id)
+			if drawn.has(key):
+				continue
+			drawn[key] = true
+			_tech_canvas.add_child(_tech_link(node, Tech.by_id[nb]))
+	for node in Tech.nodes:
+		_tech_canvas.add_child(_tech_node_button(node))
 
-func _build_node_card(node: Dictionary) -> Control:
-	var unlocked := Tech.is_unlocked(node.id)
-	var prereq_ok := Tech.prereq_met(node)
-	var affordable: bool = Tech.rp >= int(node.cost)
-	var border := Color(1, 1, 1, 0.12)
-	if unlocked:
-		border = C.COL_GREEN
-	elif prereq_ok and affordable:
-		border = C.COL_BLUE
-	elif prereq_ok:
-		border = Color(C.COL_YELLOW, 0.5)
-	var card := _panel(border)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override(&"separation", 3)
-	card.add_child(v)
-	var name_color := C.COL_GREEN if unlocked else (Color.WHITE if prereq_ok else Color(1, 1, 1, 0.4))
-	v.add_child(_label(node.name, 10, name_color))
-	var desc := _label(node.desc, 8, Color(1, 1, 1, 0.6 if prereq_ok else 0.3))
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.custom_minimum_size = Vector2(150, 0)
-	v.add_child(desc)
-	if unlocked:
-		v.add_child(_label("ACQUIRED", 8, C.COL_GREEN))
-	elif not prereq_ok:
-		v.add_child(_label("LOCKED  ·  %d RP" % int(node.cost), 8, Color(1, 1, 1, 0.35)))
+func _tech_link(a: Dictionary, b: Dictionary) -> Line2D:
+	var line := Line2D.new()
+	line.add_point(a.pos * Tech.GRID_SPACING)
+	line.add_point(b.pos * Tech.GRID_SPACING)
+	var both: bool = Tech.is_allocated(a.id) and Tech.is_allocated(b.id)
+	line.width = 3.0 if both else 2.0
+	line.default_color = Color(C.COL_BLUE, 0.85) if both else Color(1, 1, 1, 0.12)
+	return line
+
+func _tech_node_button(node: Dictionary) -> Button:
+	var sz: float = _TECH_KIND_SIZE.get(node.kind, 30.0)
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(sz, sz)
+	btn.size = Vector2(sz, sz)
+	btn.position = node.pos * Tech.GRID_SPACING - Vector2(sz, sz) * 0.5
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.tooltip_text = "%s\n%s\n%s" % [node.name, node.desc,
+			"ALLOCATED" if Tech.is_allocated(node.id) else "%d RP" % int(node.cost)]
+	var col := _branch_color(node.branch) if node.branch != "" else C.COL_BLUE
+	var allocated := Tech.is_allocated(node.id)
+	var can := Tech.can_allocate(node)
+	var style := StyleBoxFlat.new()
+	style.set_corner_radius_all(4 if node.kind == "keystone" else int(sz / 2.0))
+	style.set_border_width_all(2)
+	if allocated:
+		style.bg_color = Color(col, 0.85)
+		style.border_color = Color.WHITE
+	elif can:
+		style.bg_color = Color(col, 0.3)
+		style.border_color = col
+	elif Tech.is_reachable(node):
+		style.bg_color = Color(0, 0, 0, 0.45)
+		style.border_color = Color(col, 0.45)
 	else:
-		var btn := _button("UNLOCK  ·  %d RP" % int(node.cost),
-				C.COL_BLUE if affordable else Color(1, 1, 1, 0.4), func() -> void:
-			if Tech.unlock(node.id):
-				AudioEngine.play_sfx(&"build")
-				_refresh_tech_screen())
-		btn.disabled = not affordable
-		v.add_child(btn)
-	return card
+		style.bg_color = Color(0, 0, 0, 0.45)
+		style.border_color = Color(1, 1, 1, 0.12)
+	btn.add_theme_stylebox_override(&"normal", style)
+	btn.add_theme_stylebox_override(&"hover", style)
+	btn.add_theme_stylebox_override(&"pressed", style)
+	if node.kind == "keystone" or node.kind == "notable":
+		btn.text = String(node.name).substr(0, 1)
+		btn.add_theme_font_size_override(&"font_size", 13)
+		btn.add_theme_color_override(&"font_color", Color.WHITE if allocated else col)
+	btn.pressed.connect(func() -> void: _on_tech_node_pressed(node))
+	return btn
+
+func _on_tech_node_pressed(node: Dictionary) -> void:
+	if Tech.can_allocate(node):
+		if Tech.allocate(node.id):
+			AudioEngine.play_sfx(&"build")
+	elif Tech.is_allocated(node.id) and Tech.can_refund(node.id):
+		Tech.refund(node.id)
+		AudioEngine.play_sfx(&"hit")
 
 # ---------------------------------------------------------------------------
 # Command center (JS debug panel) — SHA-256-gated developer tools

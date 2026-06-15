@@ -483,7 +483,7 @@ func hit_enemy(e: Enemy, damage: float) -> void:
 		_grid_remove(e)
 		enemies.erase(e)
 		State.money += e.reward * Tech.fx.reward_mult # Tech ECONOMY: Salvage
-		State.add_energy(1.0)
+		State.add_energy(1.0 + Tech.fx.energy_per_kill) # Tech CORE: Energy Siphon
 		State.record_kill(e.type)
 		create_particles(e.pos, e.color, 4, 2)
 		add_light(e.pos, 60.0, e.color)
@@ -726,13 +726,13 @@ func build_tower(world_pos: Vector2, type: StringName) -> bool:
 	if hp.is_empty():
 		t.damage = def.damage
 		t.range = minf(def.range * Tech.fx.range_mult, C.MAX_TOWER_RANGE)
-		t.max_cooldown = def.cooldown
+		t.max_cooldown = maxi(4, roundi(def.cooldown * Tech.fx.cooldown_mult))
 	else:
 		hp.occupied = true
 		t.hardpoint = hp
 		t.damage = def.damage * mult.damage
 		t.range = minf(def.range * mult.range * Tech.fx.range_mult, C.MAX_TOWER_RANGE)
-		t.max_cooldown = maxi(4, roundi(def.cooldown * mult.cooldown))
+		t.max_cooldown = maxi(4, roundi(def.cooldown * mult.cooldown * Tech.fx.cooldown_mult))
 		t.scale = mult.scale
 		hardpoints_changed.emit()
 	towers.append(t)
@@ -1124,13 +1124,13 @@ func _stress_build(world_pos: Vector2, type: StringName) -> bool:
 	if hp.is_empty():
 		t.damage = def.damage
 		t.range = minf(def.range * Tech.fx.range_mult, C.MAX_TOWER_RANGE)
-		t.max_cooldown = def.cooldown
+		t.max_cooldown = maxi(4, roundi(def.cooldown * Tech.fx.cooldown_mult))
 	else:
 		hp.occupied = true
 		t.hardpoint = hp
 		t.damage = def.damage * mult.damage
 		t.range = minf(def.range * mult.range * Tech.fx.range_mult, C.MAX_TOWER_RANGE)
-		t.max_cooldown = maxi(4, roundi(def.cooldown * mult.cooldown))
+		t.max_cooldown = maxi(4, roundi(def.cooldown * mult.cooldown * Tech.fx.cooldown_mult))
 		t.scale = mult.scale
 	towers.append(t)
 	_arc_network_dirty = true
