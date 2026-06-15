@@ -29,9 +29,15 @@ A Godot 4.3 rebuild of [the original JS game](../js/), targeting web (HTML5), An
 - Energy: +1 per kill only, capped at 100 — no passive regeneration
 - EMP / Overclock abilities, frozen ×1.2 damage, overclock cdRate 2
 - Arc-tower lightning network: cardinally aligned arc towers 1–3 cells apart link into connected components; each member's bonus = component size (capped 5), driving stronger static charge and brighter bolts, with the JS dot→dash→solid link rendering
-- Command center: SHA-256-gated developer panel in the pause menu (credits, enemy spawns, wave jumps, rift create/level/rebuild, no-build overlay)
+- Command center: SHA-256-gated developer panel in the pause menu — credits, enemy spawns, wave jumps, rift create/level/rebuild, no-build overlay, `+5/+10/+25 LVL` bulk upgrade (range stays clamped to the 800 cap), and a **STRESS TEST** level builder (maxed base, ~20 rifts, a dense ring of every tower type around the core incl. a connected arc cluster, 100 mixed enemies)
+- FPS counter in the stats bar; `F` repair base / `G` install·upgrade turret hotkeys (hold to repeat)
 - Quality governor (EMA frame time, auto up/downgrade, toast, manual override in pause menu)
 - Tutorial (5 steps, typewriter), versioned hints, Wave Intelligence panel with the exact `distributeByWeights` largest-remainder math
+
+### Rendering
+- Viewport culling on the dynamic layer: off-screen enemies/projectiles/particles/lights/towers/arc-bursts are skipped (the JS edition culls the same way; Godot 2D `_draw` is immediate mode, so this matters)
+- Towers carry a persistent soft glow (stamped from a cached radial light texture) plus the muzzle flash on fire, matching the JS/Flutter look
+- Near-black clear color (`C.COL_BG`) and a 0.1×–2.0× zoom range (the 1280×720 viewport frames more world at zoom 1 than the JS/Flutter canvases)
 
 ## Run
 

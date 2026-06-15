@@ -48,7 +48,13 @@ All core gameplay systems are implemented and live.
 ### Abilities
 - **EMP Burst** — freezes all enemies within radius 120 for 5 seconds (energy cost: 40)
 - **Overclock** — doubles fire rate of one tower for 10 seconds (energy cost: 25)
-- Energy regenerates per frame; cooldowns tracked in seconds
+- Energy is earned +1 per kill, capped at 100 (no passive regeneration)
+
+### Developer Command Center
+- SHA-256-gated debug panel in the pause overlay: +1M credits, spawn any enemy, create/level/rebuild rifts, +1/+5/+10 wave jumps, no-build overlay toggle
+- `+5/+10/+25 LVL` bulk tower upgrade (range stays clamped to the 800 cap)
+- **STRESS TEST** — synthetic worst-case level for perf evaluation (maxed base + 1000 lives, ~20 rifts, a dense ring of every tower type around the core incl. a connected arc cluster, 100 mixed enemies)
+- Live FPS readout in the stats bar
 
 ### VFX & Presentation
 - Particle system with object pooling, alpha-quantized color batching

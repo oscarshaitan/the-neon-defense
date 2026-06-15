@@ -93,10 +93,12 @@ lib/
       entity_registry.dart      — Explicit entity lists
     input/input_router.dart     — JS handleClick() priority order
     world/
-      game_world.dart           — RenderLayers, pause gate, entity API
+      game_world.dart           — RenderLayers, pause gate, entity API, arc network + debug ops
       rift_path_renderer.dart   — Rift styling layer
       tile_grid.dart            — Infinite-looking grid
       hardpoint_manager.dart    — Core + micro ring hardpoints
+      arc_tower_links.dart      — Inter-tower arc link rendering
+      no_build_overlay.dart     — Command-center spatial-zoning overlay
     entities/
       towers/tower.dart         — Taunt-aware targeting, overclock cdRate
       enemies/enemy.dart        — Silhouettes, status effects, splitter death
@@ -133,10 +135,16 @@ tool/
 
 ---
 
+### Arc network, dev tools & polish (Phase A7)
+- Arc tower fires the JS instant-chain (target hit → static charge/stun → bounces to nearby enemies) and renders the bolt; cardinally aligned arc towers 1–3 cells apart link into connected components (bonus = component size, capped 5) drawn by `ArcTowerLinkRenderer`
+- SHA-256-gated **command center** in the pause menu (access code shared with JS/Godot): +1M credits, spawn any enemy, create/level/rebuild rifts, +1/+5/+10 wave jumps, `+5/+10/+25 LVL` bulk upgrade, no-build overlay toggle, and a **STRESS TEST** level builder
+- **FPS counter** in the stats bar (EMA of frame time); hidden on narrow phone widths so the bar never overflows
+- Mouse-wheel / trackpad zoom toward the cursor (web + desktop, which have no pinch)
+- In-world sprites centered on their cell (Flame's render origin is top-left); core base sits on the cell center, not the grid line
+
 ## Known gaps vs JS
 
 - World bounds are fixed at 140×90 (the JS `expandWorldBounds` growth isn't ported)
-- Debug/Command Center menu and FPS readout are not ported
 - The selection panel is docked bottom-left rather than floating next to the selected object
 
 ## Dependencies
@@ -144,6 +152,7 @@ tool/
 ```yaml
 flame: ^1.35.1           # Game engine
 flame_audio: ^2.x        # Pre-rendered music loops + SFX
-shared_preferences: ^2.x # Save/load + settings persistence
+shared_preferences: ^2.x # Save/load + settings persistence + command-center unlock
+crypto: ^3.x             # SHA-256 for the command-center access gate
 google_fonts: ^8.x       # Kept as dep; Orbitron is bundled in assets/fonts/
 ```

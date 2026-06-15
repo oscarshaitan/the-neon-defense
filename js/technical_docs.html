@@ -618,9 +618,22 @@
         <div class="desc">Rift topology mutation tools for path and scaling validation.</div>
     </div>
     <div class="method">
+        <div class="method-name">debugIncreaseWave(steps, autoStart) / debugRebuildRiftsByWave()</div>
+        <div class="desc">Jump N waves (skipped waves simulated for correct pacing) or wipe and regenerate baseline rift topology.</div>
+    </div>
+    <div class="method">
+        <div class="method-name">debugUpgradeAllTowers(levels)</div>
+        <div class="desc">Bulk +5/+10/+25 level upgrade across every tower (free). Reuses the per-level upgrade math, so range stays clamped to MAX_TOWER_RANGE (800) — never infinite.</div>
+    </div>
+    <div class="method">
+        <div class="method-name">debugStressTest()</div>
+        <div class="desc">Builds a synthetic worst-case level for human performance evaluation: maxed base turret + 1000 lives, ~20 level-1 rifts, a dense ring of every tower type packed within 8 cells of the core (incl. a contiguous, connected arc cluster), and 100 mixed enemies. Mirrored 1:1 in the Godot and Flutter command centers.</div>
+    </div>
+    <div class="method">
         <div class="method-name">toggleNoBuildOverlay()</div>
         <div class="desc">Visual debug overlay for placement restrictions and map zoning.</div>
     </div>
+    <p class="note">The command center is shared across all three editions (JS / Godot / Flutter) behind the same SHA-256 access gate, with the unlock persisted per platform (localStorage / <code>user://</code> marker / shared_preferences).</p>
 
     <h2 id="progression">10. PROGRESSION DIRECTION (PLANNED)</h2>
     <div class="method">
