@@ -89,7 +89,13 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
       lights: lights,
     );
     coreBase = CoreBase(
-      worldCenter: Vector2(worldCols * kGridSize / 2, worldRows * kGridSize / 2),
+      // Core CELL center (matches the hardpoints + rift termini). Using
+      // worldCols*kGridSize/2 lands on a grid line for an even world width,
+      // which put the base on the intersection instead of inside the cell.
+      worldCenter: Vector2(
+        (worldCols ~/ 2) * kGridSize + kGridSize / 2,
+        (worldRows ~/ 2) * kGridSize + kGridSize / 2,
+      ),
       spatialGrid: spatialGrid,
     )..priority = RenderLayers.base;
 

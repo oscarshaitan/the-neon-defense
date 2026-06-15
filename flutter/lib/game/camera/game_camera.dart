@@ -92,13 +92,14 @@ class GameCamera {
   // ---------------------------------------------------------------------------
 
   void _centerOnCore() {
-    final worldW = kWorldMinCols * kGridSize;
-    final worldH = kWorldMinRows * kGridSize;
+    // Centre on the core CELL centre (matches CoreBase), not the grid line.
+    final coreX = (kWorldMinCols ~/ 2) * kGridSize + kGridSize / 2;
+    final coreY = (kWorldMinRows ~/ 2) * kGridSize + kGridSize / 2;
     _zoom = 1.0;
     cameraComponent.viewfinder.zoom = _zoom;
     cameraComponent.viewfinder.position = Vector2(
-      worldW / 2 - game.size.x / 2,
-      worldH / 2 - game.size.y / 2,
+      coreX - game.size.x / 2,
+      coreY - game.size.y / 2,
     );
   }
 
