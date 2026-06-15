@@ -287,6 +287,12 @@ class _PauseMenuState extends State<PauseMenu> {
         const SizedBox(height: 8),
         Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center,
             children: [
+          for (final r in const [1, 5, 10])
+            _chipBtn('+$r RP', selected: false, onTap: () => game.tech.grantRp(r)),
+        ]),
+        const SizedBox(height: 8),
+        Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center,
+            children: [
           _chipBtn('NEW RIFT',
               selected: false,
               onTap: () => refreshAfter(gw.debugCreateRift)),

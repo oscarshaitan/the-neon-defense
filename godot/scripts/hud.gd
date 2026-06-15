@@ -728,6 +728,12 @@ func _build_command_center(col: VBoxContainer) -> void:
 
 	col.add_child(_label("COMMAND CENTER", 9, C.COL_PINK))
 	col.add_child(_button("+1M CREDITS", C.COL_YELLOW, world.debug_add_money))
+	var rp_row := HBoxContainer.new()
+	rp_row.add_theme_constant_override(&"separation", 6)
+	col.add_child(rp_row)
+	rp_row.add_child(_button("+1 RP", C.COL_PINK, func(): Tech.grant_rp(1)))
+	rp_row.add_child(_button("+5 RP", C.COL_PINK, func(): Tech.grant_rp(5)))
+	rp_row.add_child(_button("+10 RP", C.COL_PINK, func(): Tech.grant_rp(10)))
 	var rift_row := HBoxContainer.new()
 	rift_row.add_theme_constant_override(&"separation", 6)
 	col.add_child(rift_row)
