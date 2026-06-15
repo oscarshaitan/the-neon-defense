@@ -166,5 +166,6 @@ Measure the interaction (kills/frame), not the population.
 ---
 
 *See also: `README.md` (overview + controls + command center), the per-edition
-`README`s, `GODOT_MIGRATION_PLAN.md` / `FLUTTER_MIGRATION_PLAN.md` (parity
-plans), and `Improvements.md` (JS performance log).*
+`README`s, `GODOT_MIGRATION_PLAN.md` (Godot parity plan), and
+`Improvements.md` (JS performance log). The Flutter migration plan was retired
+once parity was reached — its history lives in git.*

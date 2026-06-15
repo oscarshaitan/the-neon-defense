@@ -257,6 +257,5 @@ the-neon-defense/
 - Cross-edition learnings & comparison: `LEARNINGS.md`
 - Feature roadmap: `ROADMAP.md`
 - Balance analysis: `GAME_BALANCE_ANALYSIS.md`
-- Flutter parity migration plan: `FLUTTER_MIGRATION_PLAN.md`
 - Godot migration plan: `GODOT_MIGRATION_PLAN.md`
 - Performance/optimization log: `Improvements.md`

@@ -2,7 +2,7 @@
 
 A Flutter/Flame port of [the original JS game](../js/), targeting web (CanvasKit), Android, and iOS from a single codebase.
 
-**Status: behavioral parity with the JS implementation** (per [FLUTTER_MIGRATION_PLAN.md](../FLUTTER_MIGRATION_PLAN.md), phases A1–A7). The JS game remains the reference spec; every number, formula, and visual detail is traced to its JS source in code comments.
+**Status: at parity with the JS implementation** (migration phases A1–A7 complete; the per-phase plan was retired — its history is in git). The JS game remains the reference spec; every number, formula, and visual detail is traced to its JS source in code comments.
 
 ---
 
