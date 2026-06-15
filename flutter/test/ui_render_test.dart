@@ -119,9 +119,10 @@ void main() {
         await settle(tester);
         game.state.waveIntelOpen.value = true;
         await settle(tester);
-        expect(find.textContaining('INTEL'), findsOneWidget);
-        expect(find.text('THREAT'), findsOneWidget);
-        expect(find.text('EXPECTED HOSTILES'), findsOneWidget);
+        expect(find.text('WAVE INTELLIGENCE'), findsOneWidget);
+        expect(find.text('RIFTS ACTIVE:'), findsOneWidget);
+        expect(find.text('THREAT LEVEL:'), findsOneWidget);
+        expect(find.text('ENEMY DISTRIBUTION:'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await cleanup(tester);
       });

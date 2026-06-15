@@ -42,14 +42,17 @@ class WaveIntelPanel extends StatelessWidget {
             child: Container(
               margin: const EdgeInsets.only(top: 64, left: 10, bottom: 12),
               padding: const EdgeInsets.all(14),
-              width: 250,
-              constraints: const BoxConstraints(maxHeight: 420),
+              constraints: const BoxConstraints(
+                minWidth: 250,
+                maxWidth: 330,
+                maxHeight: 420,
+              ),
               decoration: BoxDecoration(
                 color: const Color(0xF0050510),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xB300F3FF), width: 1),
+                border: Border.all(color: const Color(0xB3FF00AC), width: 1),
                 boxShadow: const [
-                  BoxShadow(color: Color(0x5500F3FF), blurRadius: 14),
+                  BoxShadow(color: Color(0x55FF00AC), blurRadius: 14),
                 ],
               ),
               child: SingleChildScrollView(
@@ -60,14 +63,17 @@ class WaveIntelPanel extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'WAVE ${report.wave} INTEL',
-                        style: const TextStyle(
+                      const Text(
+                        'WAVE INTELLIGENCE',
+                        style: TextStyle(
                           fontFamily: 'Orbitron',
-                          fontSize: 11,
-                          color: Color(0xFF00F3FF),
+                          fontSize: 13,
+                          color: Color(0xFFFF00AC),
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1,
+                          shadows: [
+                            Shadow(color: Color(0xFFFF00AC), blurRadius: 5),
+                          ],
                         ),
                       ),
                       GestureDetector(
@@ -76,89 +82,68 @@ class WaveIntelPanel extends StatelessWidget {
                           'X',
                           style: TextStyle(
                             fontFamily: 'Orbitron',
-                            fontSize: 11,
-                            color: Color(0x88FFFFFF),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF00F3FF),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  _row('THREAT',
-                      Text(report.threatTitle, style: _valueStyle(report.threatColor))),
-                  _row('RIFTS',
-                      Text('${report.totalRifts}', style: _valueStyle(Colors.white))),
-                  const SizedBox(height: 6),
-                  Text(
-                    report.mutationStatus,
-                    style: const TextStyle(
-                      fontFamily: 'Orbitron',
-                      fontSize: 8,
-                      color: Color(0xAAFFFFFF),
-                      height: 1.5,
-                    ),
+                  Container(
+                    margin: const EdgeInsets.only(top: 5, bottom: 6),
+                    height: 1,
+                    color: const Color(0x4DFF00AC),
                   ),
-                  if (report.tags.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: [
-                        for (final tag in report.tags)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 5, vertical: 2),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: tag.color, width: 1),
-                            ),
-                            child: Text(
-                              tag.label,
-                              style: TextStyle(
-                                fontFamily: 'Orbitron',
-                                fontSize: 7,
-                                color: tag.color,
-                                letterSpacing: 1,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 10),
+                  _row('RIFTS ACTIVE:', '${report.totalRifts}'),
+                  _row('MUTATION POTENTIAL:', report.mutationStatus),
+                  _row('THREAT LEVEL:', report.threatTitle),
+                  const SizedBox(height: 6),
                   const Text(
-                    'EXPECTED HOSTILES',
+                    'ENEMY DISTRIBUTION:',
                     style: TextStyle(
                       fontFamily: 'Orbitron',
-                      fontSize: 8,
-                      color: Color(0x8800F3FF),
-                      letterSpacing: 1,
+                      fontSize: 9,
+                      color: Color(0xFF00F3FF),
+                      letterSpacing: 0.5,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 8,
-                    runSpacing: 4,
+                    runSpacing: 6,
                     children: [
                       for (final type in _order)
                         if ((report.distribution[type] ?? 0) > 0)
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                color: kEnemies[type]!.color,
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                '${report.distribution[type]}',
-                                style: const TextStyle(
-                                  fontFamily: 'Orbitron',
-                                  fontSize: 9,
-                                  color: Colors.white,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0x40000000),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                  color: const Color(0x4000F3FF), width: 1),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 10,
+                                  height: 10,
+                                  color: kEnemies[type]!.color,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 5),
+                                Text(
+                                  '${report.distribution[type]}',
+                                  style: const TextStyle(
+                                    fontFamily: 'Orbitron',
+                                    fontSize: 10,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                     ],
                   ),
@@ -172,26 +157,33 @@ class WaveIntelPanel extends StatelessWidget {
     );
   }
 
-  TextStyle _valueStyle(Color color) => TextStyle(
-        fontFamily: 'Orbitron',
-        fontSize: 9,
-        color: color,
-        fontWeight: FontWeight.bold,
-      );
-
-  Widget _row(String label, Widget value) {
+  Widget _row(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
+          Flexible(
+            child: Text(label,
+                style: const TextStyle(
+                  fontFamily: 'Orbitron',
+                  fontSize: 9,
+                  color: Color(0xFF00F3FF),
+                )),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
               style: const TextStyle(
                 fontFamily: 'Orbitron',
                 fontSize: 9,
-                color: Color(0xAAFFFFFF),
-              )),
-          value,
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
         ],
       ),
     );

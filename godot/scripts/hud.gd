@@ -114,6 +114,44 @@ func _panel(border: Color) -> PanelContainer:
 	p.add_theme_stylebox_override(&"panel", style)
 	return p
 
+## A two-column intel row: cyan label on the left, white value pushed right
+## (matches the JS wave-info-panel .intel-group layout).
+func _intel_row(label_text: String, value_text: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", 6)
+	row.add_child(_label(label_text, 9, C.COL_BLUE))
+	var val := _label(value_text, 9, Color.WHITE)
+	val.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row.add_child(val)
+	return row
+
+## A bordered enemy-distribution chip: colored dot + count
+## (matches the JS #intel-distribution .enemy-count-group chips).
+func _dist_chip(color: Color, count: int) -> PanelContainer:
+	var chip := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.25)
+	style.border_color = Color(C.COL_BLUE, 0.25)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	chip.add_theme_stylebox_override(&"panel", style)
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override(&"separation", 5)
+	chip.add_child(box)
+	var dot := ColorRect.new()
+	dot.color = color
+	dot.custom_minimum_size = Vector2(10, 10)
+	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	box.add_child(dot)
+	box.add_child(_label(str(count), 10, Color.WHITE))
+	return chip
+
 # ---------------------------------------------------------------------------
 # Start / game over screens
 # ---------------------------------------------------------------------------
@@ -311,7 +349,7 @@ func _build_hud() -> void:
 	_hud_root.add_child(_selection_panel)
 
 	# --- Wave intel (top left) ---
-	_wave_intel = _panel(Color(C.COL_BLUE, 0.7))
+	_wave_intel = _panel(Color(C.COL_PINK, 0.7))
 	_wave_intel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_wave_intel.offset_left = 8
 	_wave_intel.offset_top = 64
@@ -431,28 +469,29 @@ func _refresh_wave_intel() -> void:
 	_wave_intel.add_child(col)
 	var head := HBoxContainer.new()
 	col.add_child(head)
-	var title := _label("WAVE %d INTEL" % report.wave, 11, C.COL_BLUE)
+	var title := _label("WAVE INTELLIGENCE", 11, C.COL_PINK)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
-	head.add_child(_button("X", Color(1, 1, 1, 0.5), func():
+	head.add_child(_button("X", C.COL_BLUE, func():
 		_wave_intel_open = false
 		_refresh_wave_intel()))
-	var threat := _label("THREAT: %s" % report.threat, 10, report.threat_color)
-	col.add_child(threat)
-	col.add_child(_label("RIFTS: %d" % report.total_rifts, 10, Color.WHITE))
-	col.add_child(_label(report.mutation_status, 9, Color(1, 1, 1, 0.6)))
-	if not report.tags.is_empty():
-		var tag_text := ""
-		for tag in report.tags:
-			tag_text += "[%s] " % tag.label
-		col.add_child(_label(tag_text, 9, C.COL_YELLOW))
-	col.add_child(_label("EXPECTED HOSTILES", 9, Color(C.COL_BLUE, 0.6)))
-	var dist_text := ""
+	# Pink header underline (matches the JS .panel-header bottom border).
+	var rule := ColorRect.new()
+	rule.color = Color(C.COL_PINK, 0.3)
+	rule.custom_minimum_size = Vector2(0, 1)
+	col.add_child(rule)
+	col.add_child(_intel_row("RIFTS ACTIVE:", "%d" % report.total_rifts))
+	col.add_child(_intel_row("MUTATION POTENTIAL:", report.mutation_status))
+	col.add_child(_intel_row("THREAT LEVEL:", report.threat))
+	col.add_child(_label("ENEMY DISTRIBUTION:", 9, C.COL_BLUE))
+	var dist := HFlowContainer.new()
+	dist.add_theme_constant_override(&"h_separation", 8)
+	dist.add_theme_constant_override(&"v_separation", 6)
+	col.add_child(dist)
 	for type in WaveIntel.ORDER:
 		var count := int(report.distribution.get(type, 0))
 		if count > 0:
-			dist_text += "%s:%d  " % [String(type), count]
-	col.add_child(_label(dist_text, 9, Color.WHITE))
+			dist.add_child(_dist_chip(C.ENEMIES[type].color, count))
 
 # ---------------------------------------------------------------------------
 # Input guard
