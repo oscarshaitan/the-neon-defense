@@ -254,6 +254,7 @@ the-neon-defense/
 
 - Player manual: `js/manual.html`
 - Technical reference: `js/technical_docs.html`
+- Cross-edition learnings & comparison: `LEARNINGS.md`
 - Feature roadmap: `ROADMAP.md`
 - Balance analysis: `GAME_BALANCE_ANALYSIS.md`
 - Flutter parity migration plan: `FLUTTER_MIGRATION_PLAN.md`
