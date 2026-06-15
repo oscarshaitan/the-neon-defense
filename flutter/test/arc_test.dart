@@ -80,6 +80,38 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('stress test builds a dense level with a connected arc network',
+      (tester) async {
+    final game = await pumpGame(tester);
+    game.startGame();
+    game.tutorial.skip();
+    await tester.pump(const Duration(milliseconds: 16));
+
+    // Async (awaits rift generation via compute); run on the real event loop.
+    await tester.runAsync(() => game.gameWorld.debugStressTest());
+    // Pump so the bulk-added towers mount and the network refreshes.
+    for (var i = 0; i < 30; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    expect(game.gameWorld.waveSystem.rifts.length, greaterThanOrEqualTo(15));
+    expect(game.entities.towers.length, greaterThanOrEqualTo(40));
+    final arcTowers =
+        game.entities.towers.where((t) => t.type == TowerType.arc).length;
+    expect(arcTowers, greaterThan(0));
+    expect(game.gameWorld.arcTowerLinks, isNotEmpty,
+        reason: 'the arc block should form a connected network');
+    expect(game.entities.enemies.length, greaterThan(0));
+    expect(game.state.lives.value, 1000);
+    expect(game.gameWorld.coreBase.level, 10);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
   testWidgets('a lone arc tower has bonus 1 and no links', (tester) async {
     final game = await pumpGame(tester);
     game.startGame();

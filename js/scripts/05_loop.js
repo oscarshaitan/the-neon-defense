@@ -1094,6 +1094,93 @@ window.debugRebuildRiftsByWave = function () {
     }
 };
 
+// Lightweight bulk placement for the stress test: validates path/tower
+// collision only (skips the camera-relative UI-bounds check in
+// isValidPlacement so towers can be placed across the whole map).
+function _stressPlaceTower(cellC, cellR, type) {
+    const cfg = TOWERS[type];
+    if (!cfg) return false;
+    const snap = {
+        x: cellC * GRID_SIZE + GRID_SIZE / 2,
+        y: cellR * GRID_SIZE + GRID_SIZE / 2
+    };
+    const tol = GRID_SIZE / 2;
+    for (const rift of paths) {
+        const path = rift.points;
+        for (let i = 0; i < path.length - 1; i++) {
+            const p1 = path[i], p2 = path[i + 1];
+            if (Math.abs(p1.y - p2.y) < 1) {
+                if (Math.abs(snap.y - p1.y) < tol &&
+                    snap.x >= Math.min(p1.x, p2.x) - tol &&
+                    snap.x <= Math.max(p1.x, p2.x) + tol) return false;
+            } else if (Math.abs(snap.x - p1.x) < tol &&
+                snap.y >= Math.min(p1.y, p2.y) - tol &&
+                snap.y <= Math.max(p1.y, p2.y) + tol) return false;
+        }
+    }
+    for (const t of towers) {
+        if (Math.abs(t.x - snap.x) < 1 && Math.abs(t.y - snap.y) < 1) return false;
+    }
+    money -= cfg.cost;
+    towers.push({
+        x: snap.x, y: snap.y, ...cfg,
+        level: 1,
+        arcNetworkBonus: type === 'arc' ? 1 : undefined,
+        arcNetworkSize: type === 'arc' ? 1 : undefined,
+        totalCost: cfg.cost, cooldown: 0, maxCooldown: cfg.cooldown,
+        damage: cfg.damage, range: cfg.range,
+        hardpointId: null, hardpointType: null, hardpointScale: 1
+    });
+    return true;
+}
+
+// Debug: synthetic worst-case level for human perf evaluation — maxed base
+// (1000 lives), ~20 level-1 rifts, a dense mix of every tower type around the
+// roads/core (with a contiguous arc block that forms a connected network), and
+// 100 mixed enemies. Mirrors the Godot/Flutter stress test.
+window.debugStressTest = function () {
+    if (gameState !== 'playing') return;
+    money = 10000000;
+    lives = 1000;
+    baseLevel = 10;
+
+    let attempts = 0;
+    while (paths.length < 20 && attempts < 80) {
+        generateNewPath();
+        attempts++;
+    }
+    for (const rift of paths) { rift.level = 1; rift.mutation = null; }
+
+    const core = paths[0].points[paths[0].points.length - 1];
+    const coreC = Math.floor(core.x / GRID_SIZE);
+    const coreR = Math.floor(core.y / GRID_SIZE);
+
+    let placed = 0;
+    // Contiguous arc block first (adjacent arc towers link into a network).
+    for (let dr = 6; dr <= 11; dr++) {
+        for (let dc = 6; dc <= 11; dc++) {
+            if (_stressPlaceTower(coreC + dc, coreR + dr, 'arc')) placed++;
+        }
+    }
+    const others = ['basic', 'rapid', 'sniper'];
+    for (let dr = -22; dr <= 22 && placed < 110; dr++) {
+        for (let dc = -22; dc <= 22 && placed < 110; dc++) {
+            if (dr >= 6 && dr <= 11 && dc >= 6 && dc <= 11) continue;
+            if (_stressPlaceTower(coreC + dc, coreR + dr,
+                others[(Math.abs(dr) + Math.abs(dc)) % others.length])) placed++;
+        }
+    }
+    markArcNetworkDirty();
+
+    const etypes = ['basic', 'fast', 'tank', 'splitter', 'bulwark', 'shifter', 'boss'];
+    for (let i = 0; i < 100; i++) debugSpawn(etypes[i % etypes.length]);
+
+    isWaveActive = true;
+    updateUI();
+    saveGame();
+    console.log(`Stress test: ${placed} towers, 100 enemies, ${paths.length} rifts.`);
+};
+
 function updateEnemies() {
     const qualityProfile = getQualityProfile();
     const lowPriorityStride = Math.max(1, qualityProfile.particleLowPriorityStride);

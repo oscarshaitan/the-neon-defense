@@ -331,6 +331,9 @@ class _PauseMenuState extends State<PauseMenu> {
                 selected: false,
                 onTap: () => setState(() => gw.debugSpawn(e.$1))),
         ]),
+        const SizedBox(height: 8),
+        _menuBtn('STRESS TEST', _pink,
+            () => refreshAfter(gw.debugStressTest)),
       ],
     );
   }

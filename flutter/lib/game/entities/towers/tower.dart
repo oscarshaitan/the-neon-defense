@@ -69,11 +69,15 @@ class Tower extends PositionComponent
   void onMount() {
     super.onMount();
     game.entities.towers.add(this);
+    // Mark on actual (de)registration — Flame add/remove is deferred, so the
+    // arc network must be recomputed once the registry truly changes.
+    game.gameWorld.markArcNetworkDirty();
   }
 
   @override
   void onRemove() {
     game.entities.towers.remove(this);
+    game.gameWorld.markArcNetworkDirty();
     super.onRemove();
   }
 

@@ -356,6 +356,94 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
     game.state.noBuildOverlay.value = !game.state.noBuildOverlay.value;
   }
 
+  /// Lightweight bulk placement (no per-tower charge UI/sfx/select). Returns
+  /// false if the tile is invalid. Cost is still deducted for consistency.
+  bool _stressBuild(Vector2 worldPos, TowerType type) {
+    final v = game.placement.validate(worldPos, type);
+    if (!v.valid) return false;
+    final hp = v.hardpoint;
+    if (hp != null && hp.occupied) return false;
+    hp?.occupied = true;
+    game.state.money.value -= kTowers[type]!.cost;
+    add(Tower(
+        position: v.snap.clone(),
+        type: type,
+        spatialGrid: spatialGrid,
+        hardpoint: hp));
+    return true;
+  }
+
+  /// Debug: synthetic worst-case level for human perf evaluation — maxed base
+  /// (1000 lives), ~20 level-1 rifts, a dense mix of every tower type around
+  /// the roads/core (with a contiguous arc block that forms a connected
+  /// network), and 100 mixed enemies. Mirrors the Godot/JS stress test.
+  Future<void> debugStressTest() async {
+    game.state.money.value = 10000000;
+    game.state.lives.value = 1000;
+    coreBase.level = 10;
+
+    var attempts = 0;
+    while (waveSystem.rifts.length < 20 && attempts < 80) {
+      await debugCreateRift();
+      attempts++;
+    }
+    for (final r in waveSystem.rifts) {
+      r.level = 1;
+      r.mutation = null;
+    }
+
+    final coreCol = worldCols ~/ 2;
+    final coreRow = worldRows ~/ 2;
+    Vector2 cellCenter(int col, int row) =>
+        Vector2((col + 0.5) * kGridSize, (row + 0.5) * kGridSize);
+    bool inBounds(int col, int row) =>
+        col >= 1 && row >= 1 && col < worldCols - 1 && row < worldRows - 1;
+
+    var placed = 0;
+    // Contiguous arc block first (adjacent arc towers link into a network).
+    for (var dr = 6; dr <= 11; dr++) {
+      for (var dc = 6; dc <= 11; dc++) {
+        final col = coreCol + dc, row = coreRow + dr;
+        if (inBounds(col, row) &&
+            _stressBuild(cellCenter(col, row), TowerType.arc)) {
+          placed++;
+        }
+      }
+    }
+    // Then scatter the other tower types around the roads + core.
+    const others = [TowerType.basic, TowerType.rapid, TowerType.sniper];
+    for (var dr = -22; dr <= 22 && placed < 110; dr++) {
+      for (var dc = -22; dc <= 22 && placed < 110; dc++) {
+        if (dr >= 6 && dr <= 11 && dc >= 6 && dc <= 11) continue;
+        final col = coreCol + dc, row = coreRow + dr;
+        if (inBounds(col, row) &&
+            _stressBuild(cellCenter(col, row),
+                others[(dr.abs() + dc.abs()) % others.length])) {
+          placed++;
+        }
+      }
+    }
+    markArcNetworkDirty();
+
+    const etypes = [
+      EnemyType.basic,
+      EnemyType.fast,
+      EnemyType.tank,
+      EnemyType.splitter,
+      EnemyType.bulwark,
+      EnemyType.shifter,
+      EnemyType.mini,
+      EnemyType.boss,
+    ];
+    for (var i = 0; i < 100; i++) {
+      debugSpawn(etypes[i % etypes.length]);
+    }
+    game.state.isWaveActive.value = true;
+    game.state.showToast('STRESS: $placed towers / 100 enemies / '
+        '${waveSystem.rifts.length} rifts');
+    game.saveSystem.save();
+  }
+
   /// Must only be called while gameplay is halted (game over, pause-menu
   /// reset, or save load) with isWaveActive already false: the registry and
   /// spatial grid are cleared synchronously here, while Flame drains the
