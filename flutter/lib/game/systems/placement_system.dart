@@ -127,6 +127,7 @@ class PlacementSystem {
       hardpoint: hp,
     );
     game.gameWorld.add(tower);
+    game.gameWorld.markArcNetworkDirty();
 
     game.gameWorld.particles.createParticles(
         validation.snap.x, validation.snap.y, kTowers[type]!.color, 5);

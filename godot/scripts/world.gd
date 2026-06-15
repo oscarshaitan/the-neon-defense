@@ -1075,6 +1075,100 @@ func debug_upgrade_all_towers(levels: int) -> void:
 func toggle_no_build_overlay() -> void:
 	show_no_build_overlay = not show_no_build_overlay
 
+## Lightweight tower placement for bulk setup — same stats as build_tower but
+## without the per-tower save/select/sfx/signals (caller batches those).
+func _stress_build(world_pos: Vector2, type: StringName) -> bool:
+	var v := validate_placement(world_pos, type)
+	if not v.valid:
+		return false
+	var hp: Dictionary = v.hp
+	if not hp.is_empty() and hp.occupied:
+		return false
+	var def := C.tower_def(type)
+	var mult := C.CORE_MULT if (not hp.is_empty() and hp.type == &"core") else C.MICRO_MULT
+	State.money -= def.cost
+	var t := Tower.new()
+	t.type = type
+	t.pos = v.snap
+	t.color = def.color
+	t.base_cost = def.cost
+	t.total_cost = def.cost
+	if hp.is_empty():
+		t.damage = def.damage
+		t.range = def.range
+		t.max_cooldown = def.cooldown
+	else:
+		hp.occupied = true
+		t.hardpoint = hp
+		t.damage = def.damage * mult.damage
+		t.range = minf(def.range * mult.range, C.MAX_TOWER_RANGE)
+		t.max_cooldown = maxi(4, roundi(def.cooldown * mult.cooldown))
+		t.scale = mult.scale
+	towers.append(t)
+	_arc_network_dirty = true
+	return true
+
+## Debug: build a synthetic worst-case level so a human can eyeball performance
+## under load — maxed base (1000 lives), ~20 level-1 rifts, a dense mix of every
+## tower type around the roads/core (with a contiguous arc block that forms a
+## connected network), and 100 mixed enemies.
+func debug_stress_test() -> void:
+	State.money = 10000000.0
+	State.lives = 1000
+	base_level = 10
+	base_cooldown = 0
+
+	# Rift generation is stochastic and can fail a given attempt, so retry up
+	# to a bounded number of times rather than bailing on the first miss.
+	var attempts := 0
+	while rifts.size() < 20 and attempts < 80:
+		debug_create_rift()
+		attempts += 1
+	for rift in rifts:
+		rift.level = 1
+		rift.mutation = {}
+
+	var placed := 0
+	# Contiguous arc block FIRST so it isn't crowded out by the cap; adjacent
+	# arc towers (1 cell apart) link into a connected network.
+	for dr in range(6, 12):
+		for dc in range(6, 12):
+			var cell := core_cell + Vector2i(dc, dr)
+			if cell.x < 1 or cell.y < 1 \
+					or cell.x >= C.WORLD_COLS - 1 or cell.y >= C.WORLD_ROWS - 1:
+				continue
+			var pos := (Vector2(cell) + Vector2(0.5, 0.5)) * C.GRID_SIZE
+			if _stress_build(pos, &"arc"):
+				placed += 1
+	# Then scatter the remaining tower types around the roads + core.
+	var others: Array[StringName] = [&"basic", &"rapid", &"sniper"]
+	for dr in range(-22, 23):
+		for dc in range(-22, 23):
+			if placed >= 110:
+				break
+			if dr >= 6 and dr <= 11 and dc >= 6 and dc <= 11:
+				continue # arc block already placed here
+			var cell := core_cell + Vector2i(dc, dr)
+			if cell.x < 1 or cell.y < 1 \
+					or cell.x >= C.WORLD_COLS - 1 or cell.y >= C.WORLD_ROWS - 1:
+				continue
+			var pos := (Vector2(cell) + Vector2(0.5, 0.5)) * C.GRID_SIZE
+			if _stress_build(pos, others[(absi(dr) + absi(dc)) % others.size()]):
+				placed += 1
+
+	_refresh_arc_network()
+	hardpoints_changed.emit()
+
+	var etypes: Array[StringName] = [&"basic", &"fast", &"tank", &"splitter",
+			&"bulwark", &"shifter", &"mini", &"boss"]
+	for i in 100:
+		debug_spawn(etypes[i % etypes.size()])
+
+	State.is_wave_active = true
+	rifts_changed.emit()
+	save_system.save_now()
+	State.show_toast("STRESS: %d towers / 100 enemies / %d rifts" % [placed, rifts.size()])
+
 func _clear_combat_state() -> void:
 	enemies.clear()
 	projectiles.clear()

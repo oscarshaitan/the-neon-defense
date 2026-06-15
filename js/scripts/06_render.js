@@ -653,6 +653,9 @@ function draw() {
         && enemies.length >= PERFORMANCE_RULES.statusHalfRateEnemyThreshold
         && ((frameCount & 1) === 1);
     enemies.forEach(e => {
+        // Cull off-screen enemies before any status VFX (frozen ring + static
+        // arcs) — previously the frozen branch drew for every enemy on the map.
+        if (!isWorldPointVisible(e.x, e.y, 90)) return;
         if (e.frozen) {
             ctx.strokeStyle = '#00f3ff';
             ctx.lineWidth = 3;
@@ -672,7 +675,6 @@ function draw() {
         const hasStatic = staticCharges > 0;
         const isStaticStunned = (e.staticStunTimer || 0) > 0;
         if (!hasStatic && !isStaticStunned) return;
-        if (!isWorldPointVisible(e.x, e.y, 90)) return;
 
         let nearCursor = false;
         if (isHovering && PERFORMANCE_RULES.enabled) {

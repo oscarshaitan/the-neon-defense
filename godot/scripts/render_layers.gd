@@ -84,6 +84,11 @@ class DynamicLayer extends Node2D:
 	# the Godot analogue of the JS LIGHT_GRADIENT_CACHE (white core → transparent
 	# edge), drawn modulated per light. One texture, reused for every flash.
 	var _light_tex: GradientTexture2D
+	# Viewport cull rect (world space) recomputed each frame; entities outside
+	# it are skipped so off-screen enemies/projectiles/particles cost nothing
+	# to draw (the JS edition culls the same way; Godot 2D _draw is immediate
+	# mode, so without this every entity is drawn every frame).
+	var _cull := Rect2(-1e9, -1e9, 2e9, 2e9)
 
 	# Arc-link stroke styles per intensity (JS _LINK_STYLES): a dot → dash →
 	# solid progression. Level 5 (= ARC_MAX_BONUS) is a solid neon double-stroke.
@@ -110,8 +115,23 @@ class DynamicLayer extends Node2D:
 	func _process(_delta: float) -> void:
 		queue_redraw()
 
+	func _update_cull_rect() -> void:
+		var cam := get_viewport().get_camera_2d()
+		if cam == null:
+			_cull = Rect2(-1e9, -1e9, 2e9, 2e9)
+			return
+		var z: float = cam.zoom.x if cam.zoom.x > 0.0 else 1.0
+		var half := get_viewport_rect().size / (2.0 * z)
+		# Margin covers entity extents + the largest light glow (boss r150).
+		_cull = Rect2(cam.get_screen_center_position() - half, half * 2.0) \
+				.grow(C.GRID_SIZE * 4.0)
+
+	func _visible(p: Vector2) -> bool:
+		return _cull.has_point(p)
+
 	func _draw() -> void:
 		var frame := State.frame_count
+		_update_cull_rect()
 		if world.show_no_build_overlay:
 			_draw_no_build_overlay()
 		_draw_spawn_discs(frame)
@@ -233,6 +253,7 @@ class DynamicLayer extends Node2D:
 
 	func _draw_towers(frame: int) -> void:
 		for t in world.towers:
+			if not _visible(t.pos): continue
 			_draw_tower_shape(t.type, t.pos, t.color, t.scale)
 			if t.level > 1:
 				_draw_level_pips(t.level, t.pos + Vector2(0, 20))
@@ -280,6 +301,7 @@ class DynamicLayer extends Node2D:
 
 	func _draw_enemies(frame: int) -> void:
 		for e in world.enemies:
+			if not _visible(e.pos): continue
 			var color := e.color
 			if e.invisible:
 				color.a = 0.2
@@ -333,10 +355,12 @@ class DynamicLayer extends Node2D:
 
 	func _draw_projectiles() -> void:
 		for p in world.projectiles:
+			if not _visible(p.pos): continue
 			draw_circle(p.pos, 3.0, p.color)
 
 	func _draw_arc_bursts() -> void:
 		for burst in world.arc_bursts:
+			if not _visible(burst.a) and not _visible(burst.b): continue
 			var alpha: float = clampf(burst.life / 8.0, 0, 1)
 			var intensity: int = burst.intensity
 			var pts := _build_arc_path(burst.a, burst.b, intensity, burst.get("phase", 0.0))
@@ -371,6 +395,7 @@ class DynamicLayer extends Node2D:
 
 	func _draw_particles() -> void:
 		for p in world.particles:
+			if not _visible(p.pos): continue
 			var c: Color = p.color
 			c.a = clampf(p.life, 0, 1)
 			draw_rect(Rect2(p.pos, Vector2(3, 3)), c)
@@ -381,6 +406,7 @@ class DynamicLayer extends Node2D:
 		# punchy flash instead of the old flat hard-edged discs.
 		const ALPHA_SCALE := 0.55
 		for l in world.lights:
+			if not _visible(l.pos): continue
 			var c: Color = l.color
 			c.a = clampf(l.life, 0, 1) * ALPHA_SCALE
 			var r: float = l.radius

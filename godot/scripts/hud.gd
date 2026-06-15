@@ -584,6 +584,7 @@ func _build_command_center(col: VBoxContainer) -> void:
 	for type in [&"basic", &"fast", &"tank", &"splitter", &"bulwark", &"shifter", &"boss"]:
 		spawn_grid.add_child(_button(String(type).to_upper(), C.COL_RED,
 				func(): world.debug_spawn(type)))
+	col.add_child(_button("STRESS TEST", C.COL_PINK, world.debug_stress_test))
 
 ## JS unlockDebug: SHA-256 the entered code; unlock + persist on match, else
 ## flash "ACCESS DENIED" for one second.
