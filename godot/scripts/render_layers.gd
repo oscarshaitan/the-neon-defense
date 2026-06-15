@@ -254,6 +254,12 @@ class DynamicLayer extends Node2D:
 	func _draw_towers(frame: int) -> void:
 		for t in world.towers:
 			if not _visible(t.pos): continue
+			# Persistent soft glow under the body (JS/Flutter towers always glow;
+			# the muzzle flash on fire adds the extra glow on top).
+			var gr := 24.0 * t.scale
+			draw_texture_rect(_light_tex,
+					Rect2(t.pos - Vector2(gr, gr), Vector2(gr * 2, gr * 2)),
+					false, Color(t.color, 0.33))
 			_draw_tower_shape(t.type, t.pos, t.color, t.scale)
 			if t.level > 1:
 				_draw_level_pips(t.level, t.pos + Vector2(0, 20))

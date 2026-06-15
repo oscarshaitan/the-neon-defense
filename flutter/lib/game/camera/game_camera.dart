@@ -52,6 +52,16 @@ class GameCamera {
     _isScaling = false;
   }
 
+  /// Mouse-wheel / trackpad zoom toward [screenPos] (web + desktop, which have
+  /// no pinch gesture). Mirrors the JS wheel zoom.
+  void zoomBy(double factor, Vector2 screenPos) {
+    final worldBefore = _screenToWorld(screenPos);
+    _zoom = (_zoom * factor).clamp(_minZoom, _maxZoom);
+    cameraComponent.viewfinder.zoom = _zoom;
+    final worldAfter = _screenToWorld(screenPos);
+    cameraComponent.viewfinder.position += worldBefore - worldAfter;
+  }
+
   /// JS draw() applies a random +-shake/2 screen-space jitter each frame
   /// (06_render.js:100-102). Implemented as a transient viewfinder offset.
   void applyShake(double amount) {
