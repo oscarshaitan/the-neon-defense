@@ -400,9 +400,10 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
         col >= 1 && row >= 1 && col < worldCols - 1 && row < worldRows - 1;
 
     var placed = 0;
-    // Contiguous arc block first (adjacent arc towers link into a network).
-    for (var dr = 6; dr <= 11; dr++) {
-      for (var dc = 6; dc <= 11; dc++) {
+    // Connected arc cluster hugging the core (contiguous -> links), close to
+    // where the rifts converge so the towers are actually in the fight.
+    for (var dr = 3; dr <= 7; dr++) {
+      for (var dc = 3; dc <= 7; dc++) {
         final col = coreCol + dc, row = coreRow + dr;
         if (inBounds(col, row) &&
             _stressBuild(cellCenter(col, row), TowerType.arc)) {
@@ -410,11 +411,13 @@ class GameWorld extends Component with HasGameReference<NeonDefenseGame> {
         }
       }
     }
-    // Then scatter the other tower types around the roads + core.
+    // Pack the other tower types into a tight ring AROUND the core (all valid
+    // tiles within 8 cells) so every rift's final approach runs a gauntlet.
     const others = [TowerType.basic, TowerType.rapid, TowerType.sniper];
-    for (var dr = -22; dr <= 22 && placed < 110; dr++) {
-      for (var dc = -22; dc <= 22 && placed < 110; dc++) {
-        if (dr >= 6 && dr <= 11 && dc >= 6 && dc <= 11) continue;
+    for (var dr = -8; dr <= 8 && placed < 200; dr++) {
+      for (var dc = -8; dc <= 8 && placed < 200; dc++) {
+        if (dr == 0 && dc == 0) continue; // leave the core cell for the base
+        if (dr >= 3 && dr <= 7 && dc >= 3 && dc <= 7) continue;
         final col = coreCol + dc, row = coreRow + dr;
         if (inBounds(col, row) &&
             _stressBuild(cellCenter(col, row),

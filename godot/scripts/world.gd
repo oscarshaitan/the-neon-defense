@@ -1129,10 +1129,10 @@ func debug_stress_test() -> void:
 		rift.mutation = {}
 
 	var placed := 0
-	# Contiguous arc block FIRST so it isn't crowded out by the cap; adjacent
-	# arc towers (1 cell apart) link into a connected network.
-	for dr in range(6, 12):
-		for dc in range(6, 12):
+	# Connected arc cluster hugging the core (contiguous -> links), close to
+	# where the rifts converge so the towers are actually in the fight.
+	for dr in range(3, 8):
+		for dc in range(3, 8):
 			var cell := core_cell + Vector2i(dc, dr)
 			if cell.x < 1 or cell.y < 1 \
 					or cell.x >= C.WORLD_COLS - 1 or cell.y >= C.WORLD_ROWS - 1:
@@ -1140,14 +1140,17 @@ func debug_stress_test() -> void:
 			var pos := (Vector2(cell) + Vector2(0.5, 0.5)) * C.GRID_SIZE
 			if _stress_build(pos, &"arc"):
 				placed += 1
-	# Then scatter the remaining tower types around the roads + core.
+	# Pack the other tower types into a tight ring AROUND the core (all valid
+	# tiles within 8 cells) so every rift's final approach runs a gauntlet.
 	var others: Array[StringName] = [&"basic", &"rapid", &"sniper"]
-	for dr in range(-22, 23):
-		for dc in range(-22, 23):
-			if placed >= 110:
+	for dr in range(-8, 9):
+		for dc in range(-8, 9):
+			if placed >= 200:
 				break
-			if dr >= 6 and dr <= 11 and dc >= 6 and dc <= 11:
-				continue # arc block already placed here
+			if dr == 0 and dc == 0:
+				continue # leave the core cell for the base
+			if dr >= 3 and dr <= 7 and dc >= 3 and dc <= 7:
+				continue # arc cluster already placed here
 			var cell := core_cell + Vector2i(dc, dr)
 			if cell.x < 1 or cell.y < 1 \
 					or cell.x >= C.WORLD_COLS - 1 or cell.y >= C.WORLD_ROWS - 1:
