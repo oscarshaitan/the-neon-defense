@@ -141,40 +141,51 @@ func _run() -> void:
 		total10 += w10[type]
 	_check(total10 == 31, "wave 10 predicts 31 hostiles")
 
-	# --- Tech Tree (Milestone E) ---
+	# --- Tech Tree (Milestone E, v2 PoE-style web) ---
 	var T = root.get_node("/root/Tech")
 	_check(T != null, "Tech autoload present")
 	T.reset_progress()
-	_check(T.NODES.size() == 16, "16 tech nodes defined")
+	_check(T.nodes.size() >= 50, "large tree (>= 50 nodes): %d" % T.nodes.size())
+	_check(T.total_tree_cost() >= 140,
+			"tree too big to fully fill in 50 waves: total cost %d" % T.total_tree_cost())
 	_check(absf(float(T.fx.dmg_mult) - 1.0) < 0.001, "default damage mult = 1.0")
-	T.grant_rp(100)
-	_check(not T.can_unlock(T.node_by_id("off_2")), "off_2 gated by prereq even with RP")
-	_check(T.can_unlock(T.node_by_id("off_1")), "off_1 unlockable with RP")
-	_check(T.unlock("off_1"), "unlock off_1 (focused optics)")
-	_check(absf(float(T.fx.dmg_mult) - 1.08) < 0.001, "off_1 applies +8% damage")
-	_check(T.unlock("off_2"), "unlock off_2 after prereq met")
-	_check(absf(float(T.fx.dmg_mult) - 1.08 * 1.12) < 0.001, "off_2 stacks damage mult")
-	_check(T.unlock("con_1"), "unlock con_1 (cryo conductors)")
-	_check(bool(T.fx.arc_chill), "con_1 enables arc chill")
-	_check(T.unlock("eco_1"), "unlock eco_1 (salvage routines)")
-	_check(absf(float(T.fx.reward_mult) - 1.15) < 0.001, "eco_1 grants +15% reward")
-	# Start-of-run bonuses apply on a fresh run.
-	_check(T.unlock("eco_2"), "unlock eco_2 (bulk discount)")
-	_check(T.unlock("eco_3"), "unlock eco_3 (war chest)")
-	_check(T.unlock("core_1"), "unlock core_1 (reinforced plating)")
+	T.grant_rp(200)
+	# Path-based allocation: a deep node is gated until you path to it.
+	_check(not T.can_allocate(T.by_id["ofN1"]), "ofN1 gated until you path to it")
+	_check(T.can_allocate(T.by_id["of1"]), "of1 reachable from START")
+	_check(T.allocate("of1") and T.allocate("of2"), "allocate the offense trunk")
+	_check(T.allocate("ofN1"), "ofN1 allocatable once adjacent")
+	_check(absf(float(T.fx.dmg_mult) - 1.03 * 1.03 * 1.10) < 0.001, "small + notable damage stacks")
+	# Mutual-exclusion keystones: taking one blocks the rival.
+	_check(T.allocate("of7") and T.allocate("of8"), "path to the offense keystones")
+	_check(T.allocate("ofK1"), "allocate EXECUTIONER keystone")
+	_check(bool(T.fx.execute), "EXECUTIONER enables execute")
+	_check(not T.can_allocate(T.by_id["ofK2"]), "rival keystone OVERWHELM is locked out")
+	# Refund: a leaf refunds; full respec returns everything.
+	var rp_before: int = T.rp
+	_check(T.can_refund("ofK1"), "leaf keystone is refundable")
+	_check(T.refund("ofK1") and T.rp == rp_before + 8, "refund returns the 8 RP")
+	_check(not T.can_refund("of1"), "interior node is not a refundable leaf")
+	# Start-of-run bonuses still apply: path to WAR CHEST (+150 credits).
+	T.refund_all()
+	T.grant_rp(200)
+	for id in ["ef1", "ef2", "efN1", "ef5", "ef6", "efN3"]:
+		_check(T.allocate(id), "allocate economy path node %s" % id)
 	main.reset_game()
-	_check(absf(S.money - (Con.STARTING_MONEY + 150.0)) < 0.001, "WAR CHEST: +150 start money")
-	_check(S.lives == Con.STARTING_LIVES + 5, "REINFORCED PLATING: +5 start lives")
+	# Start money = base + accumulated start_money (WAR CHEST 150 + two +25 nodes = 200).
+	_check(absf(S.money - (Con.STARTING_MONEY + float(T.fx.start_money))) < 0.001,
+			"start credits = base + tech start_money (%d)" % int(T.fx.start_money))
 	# Persistence round trip (carries across runs).
 	T._save()
 	var saved_rp: int = T.rp
+	var saved_count: int = T.allocated.size()
 	T.rp = 0
-	T.unlocked = {}
-	T._recompute()
+	T.allocated = {}
 	T._load()
 	T._recompute()
 	_check(T.rp == saved_rp, "tech RP survives save/load")
-	_check(T.is_unlocked("off_1") and T.is_unlocked("core_1"), "tech unlocks survive save/load")
+	_check(T.allocated.size() == saved_count and T.is_allocated("efN3"),
+			"tech allocations survive save/load")
 	T.reset_progress() # leave persistent state clean
 
 	if _failures.is_empty():
