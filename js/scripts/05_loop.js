@@ -765,6 +765,7 @@ function update() {
         // End Wave Check
         else if (enemies.length === 0) {
             // Wave Complete
+            TECH.awardWave(wave); // Tech: earn Research Points for the cleared wave
             wave++;
             startPrepPhase();
             saveGame(); // Save on wave complete
@@ -797,10 +798,19 @@ function update() {
     perfEnd('updateArcEffects', perfUpdateArc);
 
     if (lives <= 0) {
-        flushQueuedAutoSave(true);
-        gameState = 'gameover';
-        AudioEngine.playSFX('hit');
-        document.getElementById('game-over-screen').classList.remove('hidden');
+        // Tech CORE capstone: Last Stand Protocol — survive once per run.
+        if (TECH.fx.last_stand && !lastStandUsed) {
+            lastStandUsed = true;
+            lives = TECH.LAST_STAND_LIVES;
+            startShake(30);
+            createParticles(width / 2, height / 2, '#00ff41', 30, { priority: 2 });
+            updateUI();
+        } else {
+            flushQueuedAutoSave(true);
+            gameState = 'gameover';
+            AudioEngine.playSFX('hit');
+            document.getElementById('game-over-screen').classList.remove('hidden');
+        }
     }
 
     // Update music state based on bosses/mutants
@@ -862,6 +872,7 @@ function spawnEnemy() {
         isMutant: isMutant, // Track mutation status
         mutationKey: mutation ? mutation.key : null,
         frozen: 0,
+        chill: 0, // Tech CONTROL: slowed (not stopped) by arc Cryo Conductors
         staticCharges: 0,
         staticStunTimer: 0,
         type: enemyType // Store the type for drawing/logic
@@ -897,6 +908,7 @@ function spawnSubUnits(parent) {
             isMutant: parent.isMutant,
             mutationKey: parent.mutationKey,
             frozen: 0,
+            chill: 0,
             staticCharges: 0,
             staticStunTimer: 0,
             type: 'mini'
@@ -934,6 +946,7 @@ window.debugSpawn = function (type) {
         riftLevel: riftLevel,
         isMutant: false,
         frozen: 0,
+        chill: 0,
         staticCharges: 0,
         staticStunTimer: 0,
         type: type
@@ -1241,13 +1254,21 @@ function updateEnemies() {
         const dy = target.y - e.y;
         const dist = Math.hypot(dx, dy);
 
-        if (dist < e.speed) {
+        // Tech CONTROL: Cryo Conductors chill — slow (not stop) and decay.
+        let spd = e.speed;
+        if (e.chill > 0) {
+            e.chill--;
+            spd *= TECH.CHILL_SLOW;
+            if (frameCount % 16 === 0) emitUpdateParticleOnce(e.x, e.y, '#00f3ff', 1);
+        }
+
+        if (dist < spd) {
             e.x = target.x;
             e.y = target.y;
             e.pathIndex++;
         } else {
-            e.x += (dx / dist) * e.speed;
-            e.y += (dy / dist) * e.speed;
+            e.x += (dx / dist) * spd;
+            e.y += (dy / dist) * spd;
         }
 
 
@@ -1435,6 +1456,7 @@ function fireArcTower(tower, target) {
 
     addArcLightningBurst(tower.x, tower.y, target.x, target.y, bonus, false);
     hitEnemy(target, directDamage, { staticCharges: bonus });
+    if (TECH.fx.arc_chill) target.chill = TECH.CHILL_FRAMES; // Tech CONTROL: Cryo Conductors
 
     const visited = new Set();
     visited.add(target);
@@ -1449,6 +1471,7 @@ function fireArcTower(tower, target) {
 
         addArcLightningBurst(fromX, fromY, bounceTarget.x, bounceTarget.y, bonus, true);
         hitEnemy(bounceTarget, bounceDamage, { staticCharges: 1 });
+        if (TECH.fx.arc_chill) bounceTarget.chill = TECH.CHILL_FRAMES; // Tech CONTROL
 
         visited.add(bounceTarget);
         fromX = bounceTarget.x;
@@ -1592,7 +1615,13 @@ function hitEnemy(enemy, damage, hitData = null) {
         applyStaticCharges(enemy, hitData.staticCharges);
     }
 
+    damage *= TECH.fx.dmg_mult; // Tech OFFENSE: global tower damage
     if (enemy.frozen) damage *= 1.2;
+    if (enemy.frozen || enemy.chill > 0) damage *= TECH.fx.thermal_mult; // Tech CONTROL: Thermal Weakness
+    // Tech OFFENSE capstone: Executioner — finish low-HP targets.
+    if (TECH.fx.execute && enemy.maxHp > 0 && (enemy.hp / enemy.maxHp) <= TECH.EXECUTE_THRESHOLD) {
+        damage *= TECH.EXECUTE_BONUS;
+    }
     enemy.hp -= damage;
     if (enemy.hp <= 0) {
         const index = enemies.indexOf(enemy);
@@ -1600,7 +1629,7 @@ function hitEnemy(enemy, damage, hitData = null) {
             enemies.splice(index, 1);
             ENEMY_FRAME_CACHE.aliveSet.delete(enemy);
             if (enemy.type === 'boss' || enemy.isMutant) refreshThreatPresenceFromAliveSet();
-            money += enemy.reward;
+            money += enemy.reward * TECH.fx.reward_mult; // Tech ECONOMY: Salvage
 
             // Track Lifetime Kills
             if (totalKills[enemy.type] !== undefined) {

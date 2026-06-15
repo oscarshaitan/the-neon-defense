@@ -826,7 +826,8 @@ window.upgradeTower = function () {
 
 window.sellTower = function () {
     if (!selectedPlacedTower) return;
-    const refund = Math.floor((selectedPlacedTower.totalCost || selectedPlacedTower.cost) * 0.7);
+    // Tech ECONOMY: Liquidation (sell_refund, default 0.7).
+    const refund = Math.floor((selectedPlacedTower.totalCost || selectedPlacedTower.cost) * TECH.fx.sell_refund);
     money += refund;
     const index = towers.indexOf(selectedPlacedTower);
     if (index > -1) {
@@ -840,7 +841,8 @@ window.sellTower = function () {
 };
 
 function getUpgradeCost(tower) {
-    return Math.floor(tower.cost * 0.5 * tower.level);
+    // Tech ECONOMY: Bulk Discount (upgrade_cost_mult).
+    return Math.floor(tower.cost * 0.5 * tower.level * TECH.fx.upgrade_cost_mult);
 }
 
 function getSelectionAnchorWorldPos() {
@@ -1108,7 +1110,8 @@ function buildTower(worldX, worldY) {
             cooldown: 0, // Current cooldown
             maxCooldown: maxCooldown, // Store original cooldown as max
             damage: towerConfig.damage * (hardpointRules ? hardpointRules.damageMult : 1),
-            range: towerConfig.range * (hardpointRules ? hardpointRules.rangeMult : 1),
+            // Tech OFFENSE: Extended Barrels (range_mult), clamped to MAX_TOWER_RANGE.
+            range: Math.min(towerConfig.range * (hardpointRules ? hardpointRules.rangeMult : 1) * TECH.fx.range_mult, MAX_TOWER_RANGE),
             hardpointId: selectedHardpoint ? selectedHardpoint.id : null,
             hardpointType: selectedHardpoint ? selectedHardpoint.type : null,
             hardpointScale: hardpointRules ? hardpointRules.sizeScale : 1

@@ -295,6 +295,7 @@ let abilities = {
 let isPaused = false;
 let showNoBuildOverlay = false;
 let selectedZone = -1; // -1 means no zone highlighted
+let lastStandUsed = false; // Tech CORE capstone fires once per run
 
 // --- Tutorial State ---
 let tutorialActive = false;

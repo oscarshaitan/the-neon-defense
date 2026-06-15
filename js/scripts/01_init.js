@@ -492,8 +492,9 @@ function deselectTower() {
 // Calculate dynamic repair cost: $50 base, +$25 for each life bought beyond 20
 window.getRepairCost = function () {
     const baseline = 20;
-    if (lives < baseline) return 50;
-    return 50 + (lives - baseline + 1) * 25;
+    const base = (lives < baseline) ? 50 : 50 + (lives - baseline + 1) * 25;
+    // Tech CORE: Field Repairs (repair_cost_mult).
+    return Math.floor(base * TECH.fx.repair_cost_mult);
 };
 
 window.repairBase = function () {

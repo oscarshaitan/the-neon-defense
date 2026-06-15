@@ -40,12 +40,16 @@ function useAbility(type, target) {
         createParticles(target.x, target.y, '#00f3ff', 20);
         AudioEngine.playSFX('explosion'); // maybe a 'zap' sfx later
 
+        // Tech CONTROL: Deep Freeze (radius) + Cryo EMP (freeze duration).
+        const empRadius = ability.radius * TECH.fx.emp_radius_mult;
+        const empDuration = Math.floor(ability.duration * TECH.fx.emp_freeze_mult);
+
         // Freeze enemies in radius
         enemies.forEach(e => {
             const dist = Math.hypot(e.x - target.x, e.y - target.y);
-            if (dist < ability.radius) {
+            if (dist < empRadius) {
                 e.frozen = true;
-                e.frozenTimer = ability.duration;
+                e.frozenTimer = empDuration;
             }
         });
         addLightSource(target.x, target.y, 250, '#00f3ff', 2.0, 2);
@@ -618,6 +622,7 @@ function resetGameLogic() {
     prepTimer = 30;
     frameCount = 0;
     targetingAbility = null;
+    lastStandUsed = false; // Tech CORE capstone resets each run
     totalKills = { basic: 0, fast: 0, tank: 0, boss: 0, splitter: 0, mini: 0, bulwark: 0, shifter: 0 };
 
     // Reset ability cooldowns
@@ -645,6 +650,10 @@ function resetGameLogic() {
     // Reset paths to initial state
     paths = [];
     calculatePath();
+
+    // Tech Tree start-of-run bonuses (credits/lives/energy). Applied to the
+    // fresh default state of a new run — never on the save-load path.
+    if (typeof _applyTechRunBonuses === 'function') _applyTechRunBonuses();
 
     startPrepPhase();
     updateUI();
