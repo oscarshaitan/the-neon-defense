@@ -15,6 +15,7 @@ var _start_screen: Control
 var _game_over: Control
 var _hud_root: Control
 var _pause_menu: Control
+var _tech_screen: Control
 var _selection_panel: PanelContainer
 var _wave_intel: PanelContainer
 var _tutorial_box: Control
@@ -47,6 +48,7 @@ func _ready() -> void:
 	_build_hud()
 	_build_pause_menu()
 	_build_game_over()
+	_build_tech_screen()
 
 	State.phase_changed.connect(_on_phase_changed)
 	State.money_changed.connect(func(_v): _refresh_stats())
@@ -196,6 +198,7 @@ func _refresh_start_actions() -> void:
 			main.start_game()))
 	else:
 		actions.add_child(_button("INITIATE", C.COL_BLUE, main.start_game))
+	actions.add_child(_button("TECH TREE", C.COL_YELLOW, open_tech_tree))
 
 func _build_game_over() -> void:
 	_game_over = Control.new()
@@ -556,6 +559,7 @@ func refresh_pause_menu() -> void:
 	col.add_child(_button("RESET", C.COL_PINK, func():
 		main.toggle_pause()
 		main.reset_game()))
+	col.add_child(_button("TECH TREE", C.COL_YELLOW, open_tech_tree))
 	col.add_child(_label("SOUND", 9, Color(C.COL_BLUE, 0.5)))
 	col.add_child(_button("SOUND: %s" % ("OFF" if AudioEngine.muted else "ON"),
 			C.COL_GREEN if not AudioEngine.muted else Color(1, 1, 1, 0.4), func():
@@ -592,6 +596,117 @@ func refresh_pause_menu() -> void:
 		State.show_toast("DETAILS: AUTO")
 		refresh_pause_menu()))
 	_build_command_center(col)
+
+# ---------------------------------------------------------------------------
+# Tech Tree screen (ROADMAP Milestone E / GAME_BALANCE_ANALYSIS section 5)
+# ---------------------------------------------------------------------------
+
+func _build_tech_screen() -> void:
+	_tech_screen = Control.new()
+	_tech_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tech_screen.visible = false
+	add_child(_tech_screen)
+	var bg := ColorRect.new()
+	bg.color = Color(C.COL_BG, 0.97)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tech_screen.add_child(bg)
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 28)
+	_tech_screen.add_child(margin)
+	var col := VBoxContainer.new()
+	col.name = "TechCol"
+	col.add_theme_constant_override(&"separation", 12)
+	margin.add_child(col)
+	Tech.changed.connect(func() -> void:
+		if _tech_screen.visible:
+			_refresh_tech_screen())
+
+func open_tech_tree() -> void:
+	_tech_screen.visible = true
+	_refresh_tech_screen()
+
+func close_tech_tree() -> void:
+	_tech_screen.visible = false
+
+func _refresh_tech_screen() -> void:
+	var col: VBoxContainer = _tech_screen.find_child("TechCol", true, false)
+	for child in col.get_children():
+		child.queue_free()
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override(&"separation", 16)
+	col.add_child(header)
+	header.add_child(_label("TECH TREE", 26, C.COL_BLUE))
+	var rp_label := _label("RESEARCH: %d RP" % Tech.rp, 14, C.COL_YELLOW)
+	rp_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	rp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	header.add_child(rp_label)
+	header.add_child(_button("CLOSE", C.COL_PINK, close_tech_tree))
+	col.add_child(_label(
+		"Spend Research Points on permanent upgrades. Earned each wave; progress carries across runs.",
+		9, Color(C.COL_BLUE, 0.5)))
+	var branch_row := HBoxContainer.new()
+	branch_row.add_theme_constant_override(&"separation", 14)
+	branch_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(branch_row)
+	for branch in Tech.BRANCHES:
+		branch_row.add_child(_build_branch_column(branch))
+
+func _branch_color(branch: String) -> Color:
+	match branch:
+		"OFFENSE": return C.COL_PINK
+		"CONTROL": return C.COL_BLUE
+		"ECONOMY": return C.COL_YELLOW
+		"CORE": return C.COL_GREEN
+	return C.COL_BLUE
+
+func _build_branch_column(branch: String) -> Control:
+	var bcol := VBoxContainer.new()
+	bcol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bcol.add_theme_constant_override(&"separation", 8)
+	var head := _label(branch, 13, _branch_color(branch))
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bcol.add_child(head)
+	for node in Tech.nodes_in_branch(branch):
+		bcol.add_child(_build_node_card(node))
+	return bcol
+
+func _build_node_card(node: Dictionary) -> Control:
+	var unlocked := Tech.is_unlocked(node.id)
+	var prereq_ok := Tech.prereq_met(node)
+	var affordable: bool = Tech.rp >= int(node.cost)
+	var border := Color(1, 1, 1, 0.12)
+	if unlocked:
+		border = C.COL_GREEN
+	elif prereq_ok and affordable:
+		border = C.COL_BLUE
+	elif prereq_ok:
+		border = Color(C.COL_YELLOW, 0.5)
+	var card := _panel(border)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override(&"separation", 3)
+	card.add_child(v)
+	var name_color := C.COL_GREEN if unlocked else (Color.WHITE if prereq_ok else Color(1, 1, 1, 0.4))
+	v.add_child(_label(node.name, 10, name_color))
+	var desc := _label(node.desc, 8, Color(1, 1, 1, 0.6 if prereq_ok else 0.3))
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.custom_minimum_size = Vector2(150, 0)
+	v.add_child(desc)
+	if unlocked:
+		v.add_child(_label("ACQUIRED", 8, C.COL_GREEN))
+	elif not prereq_ok:
+		v.add_child(_label("LOCKED  ·  %d RP" % int(node.cost), 8, Color(1, 1, 1, 0.35)))
+	else:
+		var btn := _button("UNLOCK  ·  %d RP" % int(node.cost),
+				C.COL_BLUE if affordable else Color(1, 1, 1, 0.4), func() -> void:
+			if Tech.unlock(node.id):
+				AudioEngine.play_sfx(&"build")
+				_refresh_tech_screen())
+		btn.disabled = not affordable
+		v.add_child(btn)
+	return card
 
 # ---------------------------------------------------------------------------
 # Command center (JS debug panel) — SHA-256-gated developer tools
