@@ -141,41 +141,66 @@ func _run() -> void:
 		total10 += w10[type]
 	_check(total10 == 31, "wave 10 predicts 31 hostiles")
 
-	# --- Tech Tree (Milestone E, v2 PoE-style web) ---
+	# --- Tech Tree (Milestone E, v3 procedural PoE-style web) ---
 	var T = root.get_node("/root/Tech")
 	_check(T != null, "Tech autoload present")
 	T.reset_progress()
-	_check(T.nodes.size() >= 50, "large tree (>= 50 nodes): %d" % T.nodes.size())
-	_check(T.total_tree_cost() >= 140,
-			"tree too big to fully fill in 50 waves: total cost %d" % T.total_tree_cost())
+	_check(T.nodes.size() >= 150, "massive tree (>= 150 nodes): %d" % T.nodes.size())
+	_check(T.total_tree_cost() >= 250,
+			"tree far too big to fully fill (endless): total cost %d" % T.total_tree_cost())
 	_check(absf(float(T.fx.dmg_mult) - 1.0) < 0.001, "default damage mult = 1.0")
-	T.grant_rp(200)
-	# Path-based allocation: a deep node is gated until you path to it.
-	_check(not T.can_allocate(T.by_id["ofN1"]), "ofN1 gated until you path to it")
-	_check(T.can_allocate(T.by_id["of1"]), "of1 reachable from START")
-	_check(T.allocate("of1") and T.allocate("of2"), "allocate the offense trunk")
-	_check(T.allocate("ofN1"), "ofN1 allocatable once adjacent")
-	_check(absf(float(T.fx.dmg_mult) - 1.03 * 1.03 * 1.10) < 0.001, "small + notable damage stacks")
-	# Mutual-exclusion keystones: taking one blocks the rival.
-	_check(T.allocate("of7") and T.allocate("of8"), "path to the offense keystones")
-	_check(T.allocate("ofK1"), "allocate EXECUTIONER keystone")
-	_check(bool(T.fx.execute), "EXECUTIONER enables execute")
-	_check(not T.can_allocate(T.by_id["ofK2"]), "rival keystone OVERWHELM is locked out")
-	# Refund: a leaf refunds; full respec returns everything.
-	var rp_before: int = T.rp
-	_check(T.can_refund("ofK1"), "leaf keystone is refundable")
-	_check(T.refund("ofK1") and T.rp == rp_before + 8, "refund returns the 8 RP")
-	_check(not T.can_refund("of1"), "interior node is not a refundable leaf")
-	# Start-of-run bonuses still apply: path to WAR CHEST (+150 credits).
-	T.refund_all()
-	T.grant_rp(200)
-	for id in ["ef1", "ef2", "efN1", "ef5", "ef6", "efN3"]:
-		_check(T.allocate(id), "allocate economy path node %s" % id)
+	# Count keystones + exclusive pairs in the generated graph.
+	var keystones: Array = []
+	var excl_pairs := 0
+	for n in T.nodes:
+		if n.kind == "keystone":
+			keystones.append(n.id)
+			if not n.excludes.is_empty():
+				excl_pairs += 1
+	_check(keystones.size() == 10, "10 rim keystones: %d" % keystones.size())
+	_check(excl_pairs == 10, "every keystone is in an exclusive pair: %d" % excl_pairs)
+	# Path-based allocation: an interior hub is gated until you path to it.
+	T.grant_rp(100000)
+	var deep_locked := false
+	for n in T.nodes:
+		if n.kind == "keystone" and not T.can_allocate(n):
+			deep_locked = true
+			break
+	_check(deep_locked, "rim keystones are gated until you path to them")
+	# Greedy flood: allocate everything reachable. A disconnected node could
+	# never be allocated, so full coverage proves connectivity (no orphans).
+	var progress := true
+	while progress:
+		progress = false
+		for n in T.nodes:
+			if T.can_allocate(n):
+				T.allocate(n.id)
+				progress = true
+	# Exactly one keystone per exclusive pair stays unallocated (5 pairs -> 5 losers).
+	_check(T.allocated.size() == T.nodes.size() - 5,
+			"all nodes reachable; 5 exclusive losers remain (%d / %d)"
+			% [T.allocated.size(), T.nodes.size()])
+	var ks_allocated := 0
+	for id in keystones:
+		if T.is_allocated(id):
+			ks_allocated += 1
+	_check(ks_allocated == 5, "exactly one keystone per pair allocated: %d" % ks_allocated)
+	_check(not T.stat_summary().is_empty(), "stat summary reports cumulative bonuses")
+	# Start-of-run bonuses apply on a fresh run.
 	main.reset_game()
-	# Start money = base + accumulated start_money (WAR CHEST 150 + two +25 nodes = 200).
-	_check(absf(S.money - (Con.STARTING_MONEY + float(T.fx.start_money))) < 0.001,
-			"start credits = base + tech start_money (%d)" % int(T.fx.start_money))
+	_check(S.money > Con.STARTING_MONEY, "tech start credits applied on reset (%d)" % int(S.money))
+	# Refund: full respec returns to just START with all RP back.
+	var rp_after_flood: int = T.rp
+	T.refund_all()
+	_check(T.allocated.size() == 1 and T.rp > rp_after_flood, "REFUND ALL respecs to START")
 	# Persistence round trip (carries across runs).
+	T.grant_rp(50)
+	var first := ""
+	for n in T.nodes:
+		if n.neighbors.has(T.START_ID):
+			first = n.id
+			break
+	_check(first != "" and T.allocate(first), "allocate a START-adjacent node")
 	T._save()
 	var saved_rp: int = T.rp
 	var saved_count: int = T.allocated.size()
@@ -184,7 +209,7 @@ func _run() -> void:
 	T._load()
 	T._recompute()
 	_check(T.rp == saved_rp, "tech RP survives save/load")
-	_check(T.allocated.size() == saved_count and T.is_allocated("efN3"),
+	_check(T.allocated.size() == saved_count and T.is_allocated(first),
 			"tech allocations survive save/load")
 	T.reset_progress() # leave persistent state clean
 

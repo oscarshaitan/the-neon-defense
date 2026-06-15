@@ -1,20 +1,20 @@
 extends Node
 ## Autoload "Tech" — the Tech Tree strategy layer (ROADMAP Milestone E).
 ##
-## v2: a large Path-of-Exile-style WEB. A central START node is always
-## allocated; every other node can only be allocated when it is adjacent to a
-## node you already own, so Research Points (RP) must be spent *pathing* toward
-## what you want. Nodes come in three kinds:
-##   - small   (cost 1): tiny effects that stack deep
-##   - notable (cost 4): a meaningful single bonus
-##   - keystone(cost 8): powerful, often with a drawback, and mutually
-##                       exclusive with a rival keystone (pick one, not both)
-## RP is earned slowly (+1 per wave cleared) and, with allocations, PERSISTS
-## across runs in a separate file from the per-run save. Allocations can be
-## refunded (single leaf node, or a full free respec).
+## v3: a large Path-of-Exile-style WEB, generated procedurally so it scales for
+## an endless game. A central START is always allocated; around it sit
+## concentric rings of NOTABLE "hubs", each ringed by a wheel of small "pip"
+## nodes, all stitched together by short travel-node paths with circumferential
+## loops (so there is never a single best route). KEYSTONES live on the outer
+## rim in mutually-exclusive pairs (allocate one and its rival locks out).
 ##
-## Effects accumulate into `fx`, read live by gameplay (world.gd / main.gd).
-## Godot leads this feature; mirror the graph + effects to JS and Flutter.
+## Allocation is PATH-BASED — a node is only reachable when adjacent to one you
+## already own, so Research Points (RP, +1 per wave) are spent pathing toward
+## goals. RP + allocations PERSIST across runs in a separate save file.
+## Allocations can be refunded (single leaf, connectivity-checked, or a free
+## REFUND ALL respec). Effects accumulate into `fx`, read live by gameplay.
+##
+## Godot leads this feature; mirror the generator + effects to JS and Flutter.
 
 const SAVE_PATH := "user://neon_defense_tech.json"
 const START_ID := "start"
@@ -28,16 +28,14 @@ const EXECUTE_BONUS := 2.0
 # Core keystone restore.
 const LAST_STAND_LIVES := 5
 
-# UI: node kinds and the pixel spacing applied to the grid coordinates.
-const GRID_SPACING := 78.0
+const GRID_SPACING := 78.0 # grid units -> pixels in the UI
 const RP_PER_WAVE := 1 # slow, deliberate progression
 
 signal changed ## RP / allocation changed — UI refreshes on this.
 
 const BRANCHES: Array[String] = ["OFFENSE", "CONTROL", "ECONOMY", "CORE"]
 
-## Small-node templates: type -> {name, desc, fx}. Keeps the dense filler nodes
-## terse and consistent.
+## Small-node templates: type -> {name, desc, fx}.
 const SMALL := {
 	"dmg": {name = "WEAPON CALIBRATION", desc = "+3% tower damage", fx = {dmg_mult = 1.03}},
 	"rate": {name = "SERVO ACTUATORS", desc = "+3% fire rate", fx = {cooldown_mult = 0.97}},
@@ -52,6 +50,64 @@ const SMALL := {
 	"upcost": {name = "PRECISION MACHINING", desc = "-3% upgrade cost", fx = {upgrade_cost_mult = 0.97}},
 	"repair": {name = "REPAIR NANITES", desc = "-4% repair cost", fx = {repair_cost_mult = 0.96}},
 }
+
+## Per-theme small-node mixes (drawn around hubs and along travel paths).
+const THEME_SMALLS := {
+	"OFFENSE": ["dmg", "dmg", "rate", "range"],
+	"CONTROL": ["thermal", "emp_r", "emp_f", "rate"],
+	"ECONOMY": ["reward", "money", "upcost", "repair"],
+	"CORE": ["energy", "regen", "repair", "money"],
+}
+
+## Per-theme notable hubs, cycled as rings are filled.
+const THEME_NOTABLES := {
+	"OFFENSE": [
+		{name = "WEAPON CORE", desc = "+12% tower damage", fx = {dmg_mult = 1.12}},
+		{name = "HAIR TRIGGER", desc = "+18% fire rate", fx = {cooldown_mult = 0.82}},
+		{name = "LONG BARREL", desc = "+15% tower range", fx = {range_mult = 1.15}},
+		{name = "HIGH CALIBER", desc = "+15% tower damage", fx = {dmg_mult = 1.15}},
+	],
+	"CONTROL": [
+		{name = "CRYO CORE", desc = "+15% damage to chilled/frozen", fx = {thermal_mult = 1.15}},
+		{name = "PULSE CORE", desc = "+25% EMP radius", fx = {emp_radius_mult = 1.25}},
+		{name = "DEEP CHILL", desc = "+25% EMP freeze time", fx = {emp_freeze_mult = 1.25}},
+		{name = "FROST EDGE", desc = "+18% damage to chilled/frozen", fx = {thermal_mult = 1.18}},
+	],
+	"ECONOMY": [
+		{name = "TRADE HUB", desc = "+12% credits from kills", fx = {reward_mult = 1.12}},
+		{name = "BARGAIN", desc = "-18% upgrade cost", fx = {upgrade_cost_mult = 0.82}},
+		{name = "SCRAPYARD", desc = "-35% repair cost", fx = {repair_cost_mult = 0.65}},
+		{name = "BULLION", desc = "+200 starting credits", fx = {start_money = 200.0}},
+	],
+	"CORE": [
+		{name = "REACTOR NODE", desc = "+25 starting energy", fx = {start_energy = 25.0}},
+		{name = "SIPHON ARRAY", desc = "+0.5 energy per kill", fx = {energy_per_kill = 0.5}},
+		{name = "ABLATIVE PLATING", desc = "+1 starting life", fx = {start_lives = 1}},
+		{name = "FORTRESS CORE", desc = "+40 starting energy", fx = {start_energy = 40.0}},
+	],
+}
+
+## Rim keystones, placed in order around the outer ring. Mutually-exclusive in
+## adjacent pairs: (0,1), (2,3), (4,5), (6,7), (8,9) — partner index = i ^ 1.
+const KEYSTONES := [
+	{name = "EXECUTIONER", desc = "Enemies below 15% HP take double damage.", fx = {execute = true}},
+	{name = "OVERWHELM", desc = "+35% damage, but -12% fire rate.", fx = {dmg_mult = 1.35, cooldown_mult = 1.12}},
+	{name = "DEEP FREEZE PROTOCOL", desc = "+50% EMP radius & freeze, +20% thermal.", fx = {emp_radius_mult = 1.5, emp_freeze_mult = 1.5, thermal_mult = 1.2}},
+	{name = "PERMAFROST", desc = "+45% thermal damage, but -10% tower damage.", fx = {thermal_mult = 1.45, dmg_mult = 0.9}},
+	{name = "LIQUIDATION", desc = "Selling towers refunds 100%.", fx = {sell_refund = 1.0}},
+	{name = "WAR PROFITEER", desc = "+35% credits, but sell refund drops to 40%.", fx = {reward_mult = 1.35, sell_refund = 0.4}},
+	{name = "LAST STAND PROTOCOL", desc = "Once per run, survive a fatal breach.", fx = {last_stand = true}},
+	{name = "BULWARK", desc = "+5 starting lives, but -15% tower damage.", fx = {start_lives = 5, dmg_mult = 0.85}},
+	{name = "GLASS CANNON", desc = "+50% damage, but -15% range.", fx = {dmg_mult = 1.5, range_mult = 0.85}},
+	{name = "SIEGE DOCTRINE", desc = "+40% range, but -15% fire rate.", fx = {range_mult = 1.4, cooldown_mult = 1.15}},
+]
+
+## Concentric rings of notable hubs (outer ring becomes keystones).
+const RINGS := [
+	{r = 3.6, n = 5, wheel = 6},
+	{r = 6.9, n = 8, wheel = 5},
+	{r = 10.2, n = 10, wheel = 4},
+]
 
 # --- runtime graph ---
 var nodes: Array = [] ## Array[Dictionary]: id, branch, kind, pos, cost, name, desc, fx, neighbors, excludes
@@ -68,7 +124,7 @@ func _ready() -> void:
 	_recompute()
 
 # ---------------------------------------------------------------------------
-# Graph construction
+# Graph construction (procedural radial web)
 # ---------------------------------------------------------------------------
 
 func _add(id: String, branch: String, kind: String, x: float, y: float, cost: int,
@@ -81,135 +137,120 @@ func _add(id: String, branch: String, kind: String, x: float, y: float, cost: in
 	nodes.append(n)
 	by_id[id] = n
 
-## Small templated node.
-func _small(id: String, branch: String, type: String, x: float, y: float, neighbors: Array) -> void:
-	var t: Dictionary = SMALL[type]
-	_add(id, branch, "small", x, y, 1, t.name, t.desc, t.fx, neighbors)
-
 func _link(a: String, b: String) -> void:
 	if by_id.has(a) and not by_id[a].neighbors.has(b):
 		by_id[a].neighbors.append(b)
 	if by_id.has(b) and not by_id[b].neighbors.has(a):
 		by_id[b].neighbors.append(a)
 
+## Direction unit vector for a compass angle in degrees (0 = up, 90 = right).
+func _dir(ang_deg: float) -> Vector2:
+	var r := deg_to_rad(ang_deg)
+	return Vector2(sin(r), -cos(r))
+
+## Branch/theme for an angle (top = OFFENSE, then clockwise).
+func _theme_for(ang_deg: float) -> String:
+	var a := fmod(ang_deg, 360.0)
+	if a < 0.0:
+		a += 360.0
+	var idx := int(floor((a + 45.0) / 90.0)) % 4
+	return BRANCHES[idx]
+
+func _nearest(id: String, candidates: Array) -> String:
+	var p: Vector2 = by_id[id].pos
+	var best := ""
+	var best_d := INF
+	for c in candidates:
+		var d: float = p.distance_squared_to(by_id[c].pos)
+		if d < best_d:
+			best_d = d
+			best = c
+	return best
+
+## A wheel of small "pip" nodes orbiting a hub, ring-linked and tied to the hub.
+func _build_wheel(hub: String, center: Vector2, theme: String, k: int, base_ang: float) -> void:
+	var types: Array = THEME_SMALLS[theme]
+	var wids: Array = []
+	for i in k:
+		var a := base_ang + (float(i) / k) * 360.0
+		var p := center + _dir(a) * 0.95
+		var t: Dictionary = SMALL[types[i % types.size()]]
+		var wid := "%s_w%d" % [hub, i]
+		_add(wid, theme, "small", p.x, p.y, 1, t.name, t.desc, t.fx, [hub])
+		wids.append(wid)
+	for i in k:
+		_link(wids[i], wids[(i + 1) % k])
+
+## Travel path of `m` small nodes between two existing nodes.
+func _connect(a: String, b: String, m: int) -> void:
+	var pa: Vector2 = by_id[a].pos
+	var pb: Vector2 = by_id[b].pos
+	var theme: String = by_id[b].branch if by_id[b].branch != "" else by_id[a].branch
+	if theme == "":
+		theme = "OFFENSE"
+	var types: Array = THEME_SMALLS[theme]
+	var prev := a
+	for j in range(1, m + 1):
+		var p := pa.lerp(pb, float(j) / (m + 1))
+		var t: Dictionary = SMALL[types[j % types.size()]]
+		var tid := "tr_%s_%s_%d" % [a, b, j]
+		_add(tid, theme, "small", p.x, p.y, 1, t.name, t.desc, t.fx, [prev])
+		prev = tid
+	_link(prev, b)
+
 func _build_graph() -> void:
 	nodes.clear()
 	by_id.clear()
-	_add(START_ID, "", "start", 0, 0, 0, "CORE UPLINK", "Allocation origin.", {}, [])
+	_add(START_ID, "", "start", 0, 0, 0, "CORE UPLINK", "Allocation origin — always active.", {}, [])
 
-	# === OFFENSE (up) =======================================================
-	_small("of1", "OFFENSE", "dmg", 0, -1, [START_ID])
-	_small("of2", "OFFENSE", "dmg", 0, -2, ["of1"])
-	_add("ofN1", "OFFENSE", "notable", 0, -3, 4, "FOCUSED OPTICS", "+10% tower damage",
-			{dmg_mult = 1.10}, ["of2"])
-	# left fork — fire rate
-	_small("of3", "OFFENSE", "rate", -1, -3, ["ofN1"])
-	_small("of4", "OFFENSE", "rate", -2, -3, ["of3"])
-	_add("ofN2", "OFFENSE", "notable", -3, -3, 4, "BALLISTICS ARRAY", "+15% fire rate",
-			{cooldown_mult = 0.85}, ["of4"])
-	_small("of4b", "OFFENSE", "dmg", -3, -2, ["ofN2"])
-	# right fork — range
-	_small("of5", "OFFENSE", "range", 1, -3, ["ofN1"])
-	_small("of6", "OFFENSE", "range", 2, -3, ["of5"])
-	_add("ofN3", "OFFENSE", "notable", 3, -3, 4, "TARGETING UPLINK", "+12% tower range",
-			{range_mult = 1.12}, ["of6"])
-	_small("of6b", "OFFENSE", "range", 3, -2, ["ofN3"])
-	# trunk to keystones
-	_small("of7", "OFFENSE", "dmg", 0, -4, ["ofN1"])
-	_small("of8", "OFFENSE", "dmg", 0, -5, ["of7"])
-	_add("ofK1", "OFFENSE", "keystone", -1, -6, 8, "EXECUTIONER",
-			"Enemies below 15% HP take double damage.", {execute = true}, ["of8"], ["ofK2"])
-	_add("ofK2", "OFFENSE", "keystone", 1, -6, 8, "OVERWHELM",
-			"+35% damage, but -12% fire rate.", {dmg_mult = 1.35, cooldown_mult = 1.12},
-			["of8"], ["ofK1"])
+	var notable_idx := {"OFFENSE": 0, "CONTROL": 0, "ECONOMY": 0, "CORE": 0}
+	var ring_hubs: Array = [] # per-ring array of hub ids
+	var ks := 0
+	for ri in RINGS.size():
+		var ring: Dictionary = RINGS[ri]
+		var is_outer: bool = ri == RINGS.size() - 1
+		var ids: Array = []
+		for i in int(ring.n):
+			var ang := (float(i) / int(ring.n)) * 360.0 + ri * 12.0 # stagger rings
+			var theme := _theme_for(ang)
+			var pos := _dir(ang) * float(ring.r)
+			var hub := "h%d_%d" % [ri, i]
+			if is_outer and ks < KEYSTONES.size():
+				var k: Dictionary = KEYSTONES[ks]
+				_add(hub, theme, "keystone", pos.x, pos.y, 8, k.name, k.desc, k.fx.duplicate(), [])
+				ks += 1
+			else:
+				var pool: Array = THEME_NOTABLES[theme]
+				var nb: Dictionary = pool[notable_idx[theme] % pool.size()]
+				notable_idx[theme] += 1
+				_add(hub, theme, "notable", pos.x, pos.y, 4, nb.name, nb.desc, nb.fx.duplicate(), [])
+			_build_wheel(hub, pos, theme, int(ring.wheel), ang)
+			ids.append(hub)
+		ring_hubs.append(ids)
 
-	# === CONTROL (right) ====================================================
-	_small("cf1", "CONTROL", "rate", 1, 0, [START_ID])
-	_small("cf2", "CONTROL", "thermal", 2, 0, ["cf1"])
-	_add("cfN1", "CONTROL", "notable", 3, 0, 4, "CRYO CONDUCTORS",
-			"Arc attacks chill enemies (slow).", {arc_chill = true}, ["cf2"])
-	# up fork — EMP
-	_small("cf3", "CONTROL", "emp_r", 3, -1, ["cfN1"])
-	_small("cf4", "CONTROL", "emp_f", 3, -2, ["cf3"])
-	_add("cfN2", "CONTROL", "notable", 3, -3, 4, "OVERCHARGED EMP",
-			"+25% EMP radius and freeze time", {emp_radius_mult = 1.25, emp_freeze_mult = 1.25},
-			["cf4"])
-	# down fork — thermal
-	_small("cf5", "CONTROL", "thermal", 3, 1, ["cfN1"])
-	_small("cf6", "CONTROL", "thermal", 3, 2, ["cf5"])
-	_add("cfN3", "CONTROL", "notable", 3, 3, 4, "THERMAL LANCE", "+20% damage to chilled/frozen",
-			{thermal_mult = 1.20}, ["cf6"])
-	_small("cf6b", "CONTROL", "thermal", 4, 3, ["cfN3"])
-	# trunk to keystones
-	_small("cf7", "CONTROL", "emp_f", 4, 0, ["cfN1"])
-	_small("cf8", "CONTROL", "thermal", 5, 0, ["cf7"])
-	_add("cfK1", "CONTROL", "keystone", 6, -1, 8, "DEEP FREEZE PROTOCOL",
-			"+50% EMP radius & freeze, +20% thermal damage.",
-			{emp_radius_mult = 1.5, emp_freeze_mult = 1.5, thermal_mult = 1.2}, ["cf8"], ["cfK2"])
-	_add("cfK2", "CONTROL", "keystone", 6, 1, 8, "PERMAFROST",
-			"+45% damage to chilled/frozen, but -10% tower damage.",
-			{thermal_mult = 1.45, dmg_mult = 0.90}, ["cf8"], ["cfK1"])
+	# Keystone exclusive pairs (rim hubs, partner index = i ^ 1).
+	var outer: Array = ring_hubs[RINGS.size() - 1]
+	for k in outer.size():
+		var partner := k ^ 1
+		if partner < outer.size():
+			by_id[outer[k]].excludes = [outer[partner]]
 
-	# === ECONOMY (down) =====================================================
-	_small("ef1", "ECONOMY", "reward", 0, 1, [START_ID])
-	_small("ef2", "ECONOMY", "reward", 0, 2, ["ef1"])
-	_add("efN1", "ECONOMY", "notable", 0, 3, 4, "SALVAGE NETWORK", "+12% credits from kills",
-			{reward_mult = 1.12}, ["ef2"])
-	# left fork — costs
-	_small("ef3", "ECONOMY", "upcost", -1, 3, ["efN1"])
-	_small("ef4", "ECONOMY", "repair", -2, 3, ["ef3"])
-	_add("efN2", "ECONOMY", "notable", -3, 3, 4, "FIELD LOGISTICS",
-			"-15% upgrade cost, -30% repair cost", {upgrade_cost_mult = 0.85, repair_cost_mult = 0.70},
-			["ef4"])
-	# right fork — starting credits
-	_small("ef5", "ECONOMY", "money", 1, 3, ["efN1"])
-	_small("ef6", "ECONOMY", "money", 2, 3, ["ef5"])
-	_add("efN3", "ECONOMY", "notable", 3, 3, 4, "WAR CHEST", "+150 starting credits",
-			{start_money = 150.0}, ["ef6"])
-	# trunk to keystones
-	_small("ef7", "ECONOMY", "reward", 0, 4, ["efN1"])
-	_small("ef8", "ECONOMY", "reward", 0, 5, ["ef7"])
-	_add("efK1", "ECONOMY", "keystone", -1, 6, 8, "LIQUIDATION",
-			"Selling towers refunds 100%.", {sell_refund = 1.0}, ["ef8"], ["efK2"])
-	_add("efK2", "ECONOMY", "keystone", 1, 6, 8, "WAR PROFITEER",
-			"+35% credits, but sell refund drops to 40%.",
-			{reward_mult = 1.35, sell_refund = 0.40}, ["ef8"], ["efK1"])
+	# Backbone connects to each cluster's GATEWAY pip (wheel[0]), never through
+	# the hub — so a hub (e.g. an un-picked keystone) is an optional endpoint and
+	# never strands its wheel. START -> inner ring; each ring -> nearest hub of
+	# the ring inside it; plus circumferential loops so multiple routes exist.
+	for hub in ring_hubs[0]:
+		_connect(START_ID, hub + "_w0", 2)
+	for ri in range(1, RINGS.size()):
+		for hub in ring_hubs[ri]:
+			_connect(_nearest(hub, ring_hubs[ri - 1]) + "_w0", hub + "_w0", 2)
+	for ri in RINGS.size():
+		var ids: Array = ring_hubs[ri]
+		for i in ids.size():
+			_connect(ids[i] + "_w0", ids[(i + 1) % ids.size()] + "_w0", 2)
 
-	# === CORE (left) ========================================================
-	_small("rf1", "CORE", "energy", -1, 0, [START_ID])
-	_small("rf2", "CORE", "regen", -2, 0, ["rf1"])
-	_add("rfN1", "CORE", "notable", -3, 0, 4, "CAPACITOR BANK", "+25 starting energy",
-			{start_energy = 25.0}, ["rf2"])
-	# up fork — durability
-	_small("rf3", "CORE", "repair", -3, -1, ["rfN1"])
-	_small("rf4", "CORE", "repair", -3, -2, ["rf3"])
-	_add("rfN2", "CORE", "notable", -3, -3, 5, "REINFORCED PLATING", "+2 starting lives",
-			{start_lives = 2}, ["rf4"])
-	# down fork — energy
-	_small("rf5", "CORE", "regen", -3, 1, ["rfN1"])
-	_small("rf6", "CORE", "energy", -3, 2, ["rf5"])
-	_add("rfN3", "CORE", "notable", -3, 3, 4, "OVERCLOCKED REACTOR", "+40 starting energy",
-			{start_energy = 40.0}, ["rf6"])
-	# trunk to keystones
-	_small("rf7", "CORE", "repair", -4, 0, ["rfN1"])
-	_small("rf8", "CORE", "energy", -5, 0, ["rf7"])
-	_add("rfK1", "CORE", "keystone", -6, -1, 8, "LAST STAND PROTOCOL",
-			"Once per run, survive a fatal breach (restore 5 lives).", {last_stand = true},
-			["rf8"], ["rfK2"])
-	_add("rfK2", "CORE", "keystone", -6, 1, 8, "BULWARK",
-			"+5 starting lives, but -15% tower damage.", {start_lives = 5, dmg_mult = 0.85},
-			["rf8"], ["rfK1"])
-
-	# Near-center ring links — lets you travel between branches for hybrid
-	# builds, so there is no single linear "best" path.
-	_link("of1", "cf1")
-	_link("cf1", "ef1")
-	_link("ef1", "rf1")
-	_link("rf1", "of1")
-
-	# Normalize adjacency to be bidirectional: each node declares its parent,
-	# so add the reverse edge so reachability and refund-connectivity traverse
-	# the web from either side.
+	# Make every link bidirectional so reachability and refund-connectivity
+	# traverse the web from either side.
 	for n in nodes:
 		for nb in n.neighbors:
 			if by_id.has(nb) and not by_id[nb].neighbors.has(n.id):
@@ -246,6 +287,45 @@ func _recompute() -> void:
 				_apply(f, key, n.fx[key])
 	fx = f
 	changed.emit()
+
+## Human-readable cumulative bonuses from everything currently allocated.
+func stat_summary() -> Array:
+	var out: Array = []
+	if fx.dmg_mult != 1.0:
+		out.append("Damage  %+d%%" % roundi((fx.dmg_mult - 1.0) * 100.0))
+	if fx.cooldown_mult != 1.0:
+		out.append("Fire rate  %+d%%" % roundi((1.0 / fx.cooldown_mult - 1.0) * 100.0))
+	if fx.range_mult != 1.0:
+		out.append("Range  %+d%%" % roundi((fx.range_mult - 1.0) * 100.0))
+	if fx.reward_mult != 1.0:
+		out.append("Credits  %+d%%" % roundi((fx.reward_mult - 1.0) * 100.0))
+	if fx.thermal_mult != 1.0:
+		out.append("Vs chilled/frozen  %+d%%" % roundi((fx.thermal_mult - 1.0) * 100.0))
+	if fx.emp_radius_mult != 1.0:
+		out.append("EMP radius  %+d%%" % roundi((fx.emp_radius_mult - 1.0) * 100.0))
+	if fx.emp_freeze_mult != 1.0:
+		out.append("EMP freeze  %+d%%" % roundi((fx.emp_freeze_mult - 1.0) * 100.0))
+	if fx.upgrade_cost_mult != 1.0:
+		out.append("Upgrade cost  %+d%%" % roundi((fx.upgrade_cost_mult - 1.0) * 100.0))
+	if fx.repair_cost_mult != 1.0:
+		out.append("Repair cost  %+d%%" % roundi((fx.repair_cost_mult - 1.0) * 100.0))
+	if fx.sell_refund != 0.7:
+		out.append("Sell refund  %d%%" % roundi(fx.sell_refund * 100.0))
+	if fx.start_money != 0.0:
+		out.append("Start credits  +%d" % int(fx.start_money))
+	if fx.start_lives != 0:
+		out.append("Start lives  +%d" % int(fx.start_lives))
+	if fx.start_energy != 0.0:
+		out.append("Start energy  +%d" % int(fx.start_energy))
+	if fx.energy_per_kill != 0.0:
+		out.append("Energy / kill  +%.1f" % fx.energy_per_kill)
+	if fx.execute:
+		out.append("Execute  (<15% HP -> x2)")
+	if fx.arc_chill:
+		out.append("Arc attacks chill")
+	if fx.last_stand:
+		out.append("Last Stand active")
+	return out
 
 # ---------------------------------------------------------------------------
 # Allocation (path-based) + refund

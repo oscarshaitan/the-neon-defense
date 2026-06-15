@@ -19,6 +19,8 @@ var _tech_screen: Control
 var _tech_viewport: Control
 var _tech_canvas: Control
 var _tech_zoom := 1.0
+var _tech_hover_label: Label
+var _tech_stats_label: Label
 const _TECH_KIND_SIZE := {"start": 34.0, "small": 30.0, "notable": 48.0, "keystone": 60.0}
 var _selection_panel: PanelContainer
 var _wave_intel: PanelContainer
@@ -653,6 +655,38 @@ func _build_tech_screen() -> void:
 	hint.offset_top = -22
 	hint.offset_bottom = -8
 	_tech_screen.add_child(hint)
+	# Left info panel: hovered node details + cumulative bonuses. Mouse-ignored
+	# so it never blocks panning or node clicks beneath it.
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	panel.offset_top = 48
+	panel.offset_bottom = -32
+	panel.offset_left = 12
+	panel.custom_minimum_size = Vector2(248, 0)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pstyle := StyleBoxFlat.new()
+	pstyle.bg_color = Color(C.COL_BG, 0.6)
+	pstyle.set_border_width_all(1)
+	pstyle.border_color = Color(C.COL_BLUE, 0.4)
+	pstyle.set_corner_radius_all(6)
+	pstyle.set_content_margin_all(12)
+	panel.add_theme_stylebox_override(&"panel", pstyle)
+	_tech_screen.add_child(panel)
+	var pcol := VBoxContainer.new()
+	pcol.add_theme_constant_override(&"separation", 8)
+	pcol.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(pcol)
+	_tech_hover_label = _label("Hover a node for details.", 10, Color(1, 1, 1, 0.7))
+	_tech_hover_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tech_hover_label.custom_minimum_size = Vector2(224, 64)
+	pcol.add_child(_tech_hover_label)
+	var sep := HSeparator.new()
+	pcol.add_child(sep)
+	pcol.add_child(_label("TOTAL BONUSES", 11, C.COL_YELLOW))
+	_tech_stats_label = _label("", 10, Color(C.COL_GREEN, 0.9))
+	_tech_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tech_stats_label.custom_minimum_size = Vector2(224, 0)
+	pcol.add_child(_tech_stats_label)
 	Tech.changed.connect(func() -> void:
 		if _tech_screen.visible:
 			_refresh_tech_screen())
@@ -711,6 +745,32 @@ func _refresh_tech_screen() -> void:
 			_tech_canvas.add_child(_tech_link(node, Tech.by_id[nb]))
 	for node in Tech.nodes:
 		_tech_canvas.add_child(_tech_node_button(node))
+	_refresh_tech_stats()
+
+func _refresh_tech_stats() -> void:
+	if _tech_stats_label == null:
+		return
+	var lines: Array = Tech.stat_summary()
+	if lines.is_empty():
+		_tech_stats_label.text = "— none yet —"
+	else:
+		_tech_stats_label.text = "\n".join(PackedStringArray(lines))
+
+func _tech_hover(node: Dictionary) -> void:
+	if _tech_hover_label == null:
+		return
+	var status := "ALLOCATED"
+	if not Tech.is_allocated(node.id):
+		if Tech._excluded_blocked(node):
+			status = "LOCKED OUT (exclusive)"
+		elif Tech.can_allocate(node):
+			status = "AVAILABLE  ·  %d RP" % int(node.cost)
+		elif Tech.is_reachable(node):
+			status = "NEED %d RP" % int(node.cost)
+		else:
+			status = "LOCKED  ·  %d RP" % int(node.cost)
+	_tech_hover_label.text = "%s\n[%s · %s]\n%s" % [
+			node.name, String(node.kind).to_upper(), status, node.desc]
 
 func _tech_link(a: Dictionary, b: Dictionary) -> Line2D:
 	var line := Line2D.new()
@@ -751,11 +811,8 @@ func _tech_node_button(node: Dictionary) -> Button:
 	btn.add_theme_stylebox_override(&"normal", style)
 	btn.add_theme_stylebox_override(&"hover", style)
 	btn.add_theme_stylebox_override(&"pressed", style)
-	if node.kind == "keystone" or node.kind == "notable":
-		btn.text = String(node.name).substr(0, 1)
-		btn.add_theme_font_size_override(&"font_size", 13)
-		btn.add_theme_color_override(&"font_color", Color.WHITE if allocated else col)
 	btn.pressed.connect(func() -> void: _on_tech_node_pressed(node))
+	btn.mouse_entered.connect(func() -> void: _tech_hover(node))
 	return btn
 
 func _on_tech_node_pressed(node: Dictionary) -> void:
