@@ -88,18 +88,30 @@ const BIG_FX := {
 	"repair": {repair_cost_mult = 0.85},
 }
 
-## Branch-tip capstones — unique unlocks (no drawbacks, no exclusivity).
-## Indexed by branch so each capstone matches its cone's theme.
-const CAPSTONES := [
-	{name = "EXECUTIONER", desc = "Enemies below 15% HP take double damage.", fx = {execute = true}},
-	{name = "DEEP FREEZE PROTOCOL", desc = "+40% EMP radius & freeze time.", fx = {emp_radius_mult = 1.4, emp_freeze_mult = 1.4}},
-	{name = "LIQUIDATION", desc = "Selling towers refunds 100%.", fx = {sell_refund = 1.0}},
-	{name = "LAST STAND PROTOCOL", desc = "Once per run, survive a fatal breach.", fx = {last_stand = true}},
-	{name = "APEX ROUNDS", desc = "+30% tower damage.", fx = {dmg_mult = 1.30}},
-	{name = "CRYO CONDUCTORS", desc = "Arc attacks chill enemies (slow).", fx = {arc_chill = true}},
-	{name = "MINT", desc = "+30% credits from kills.", fx = {reward_mult = 1.30}},
-	{name = "OVERCLOCK CORE", desc = "+28% fire rate.", fx = {cooldown_mult = 0.78}},
-]
+## Theme per cone. Deliberately NOT period-4, so opposite branches differ
+## (no mirror symmetry). Each of the 4 themes appears exactly twice.
+const THEME_ORDER := ["OFFENSE", "CONTROL", "ECONOMY", "CORE", "CONTROL", "OFFENSE", "CORE", "ECONOMY"]
+
+## Branch-tip capstones — unique, drawback-free unlocks, grouped by theme so a
+## cone's capstone matches its theme (two cones per theme -> two capstones each).
+const CAPSTONES_BY_THEME := {
+	"OFFENSE": [
+		{name = "EXECUTIONER", desc = "Enemies below 15% HP take double damage.", fx = {execute = true}},
+		{name = "APEX ROUNDS", desc = "+30% tower damage.", fx = {dmg_mult = 1.30}},
+	],
+	"CONTROL": [
+		{name = "DEEP FREEZE PROTOCOL", desc = "+40% EMP radius & freeze time.", fx = {emp_radius_mult = 1.4, emp_freeze_mult = 1.4}},
+		{name = "CRYO CONDUCTORS", desc = "Arc attacks chill enemies (slow).", fx = {arc_chill = true}},
+	],
+	"ECONOMY": [
+		{name = "LIQUIDATION", desc = "Selling towers refunds 100%.", fx = {sell_refund = 1.0}},
+		{name = "MINT", desc = "+30% credits from kills.", fx = {reward_mult = 1.30}},
+	],
+	"CORE": [
+		{name = "LAST STAND PROTOCOL", desc = "Once per run, survive a fatal breach.", fx = {last_stand = true}},
+		{name = "OVERCLOCK CORE", desc = "+28% fire rate.", fx = {cooldown_mult = 0.78}},
+	],
+}
 
 # --- runtime graph ---
 var nodes: Array = [] ## Array[Dictionary]: id, branch, kind, pos, cost, name, desc, fx, neighbors
@@ -198,9 +210,10 @@ func _describe(f: Dictionary) -> String:
 		p.append("+%.1f energy/kill" % f.energy_per_kill)
 	return " · ".join(PackedStringArray(p))
 
-## A cluster pocket: a big centre node ringed by pips. Returns inward "entry"
-## and outward "exit" pip ids for connecting along the cone.
-func _build_cluster(center: Vector2, theme: String, ang: float, capstone_idx: int) -> Dictionary:
+## A cluster pocket: a big centre node ringed by pips. Returns the ring pip ids
+## plus inward "entry" / outward "exit" pips for connecting along the cone.
+func _build_cluster(center: Vector2, theme: String, ang: float,
+		cap_name := "", cap_desc := "", cap_fx := {}) -> Dictionary:
 	var types: Array = THEME_SMALLS[theme]
 	var ring: Array = []
 	var present := {}
@@ -213,9 +226,8 @@ func _build_cluster(center: Vector2, theme: String, ang: float, capstone_idx: in
 	for j in RING:
 		_link(ring[j], ring[(j + 1) % RING])
 	var cid := _new_id()
-	if capstone_idx >= 0:
-		var k: Dictionary = CAPSTONES[capstone_idx]
-		_add(cid, theme, "capstone", center.x, center.y, 10, k.name, k.desc, k.fx.duplicate(), [])
+	if cap_name != "":
+		_add(cid, theme, "capstone", center.x, center.y, 10, cap_name, cap_desc, cap_fx.duplicate(), [])
 	else:
 		var f := _mix_fx(present)
 		_add(cid, theme, "big", center.x, center.y, 4 + present.size(),
@@ -223,26 +235,64 @@ func _build_cluster(center: Vector2, theme: String, ang: float, capstone_idx: in
 	for j in RING:
 		_link(cid, ring[j])
 	# entry = inward pip (angle ~ ang+180 -> index RING/2), exit = outward (index 0)
-	return {entry = ring[RING / 2], exit = ring[0]}
+	return {entry = ring[RING / 2], exit = ring[0], ring = ring, center = center}
+
+## Ring pip of a cluster nearest a target point (used to face a neighbour cone).
+func _nearest_pip(cluster: Dictionary, target: Vector2) -> String:
+	var best := ""
+	var best_d := INF
+	for id in cluster.ring:
+		var d: float = by_id[id].pos.distance_squared_to(target)
+		if d < best_d:
+			best_d = d
+			best = id
+	return best
 
 func _build_graph() -> void:
 	nodes.clear()
 	by_id.clear()
 	_nid = 0
 	_add(START_ID, "", "start", 0, 0, 0, "CORE UPLINK", "Allocation origin — always active.", {}, [])
+	var clusters: Array = [] # clusters[b] = Array of cluster dicts (inner -> outer)
+	var cap_used := {"OFFENSE": 0, "CONTROL": 0, "ECONOMY": 0, "CORE": 0}
 	for b in ROOT_BRANCHES:
 		var ang := float(b) * (360.0 / ROOT_BRANCHES)
-		var theme: String = BRANCHES[b % BRANCHES.size()]
+		var theme: String = THEME_ORDER[b]
 		var prev_id := START_ID
 		var prev_pos := Vector2.ZERO
+		var col: Array = []
 		for i in CLUSTERS_PER_BRANCH:
 			var center := _dir(ang) * (RADIUS0 + i * CLUSTER_STEP)
-			var is_cap: bool = i == CLUSTERS_PER_BRANCH - 1
-			var cl := _build_cluster(center, theme, ang, b if is_cap else -1)
+			var cap_name := ""
+			var cap_desc := ""
+			var cap_fx := {}
+			if i == CLUSTERS_PER_BRANCH - 1: # outer cluster = capstone
+				var pool: Array = CAPSTONES_BY_THEME[theme]
+				var k: Dictionary = pool[cap_used[theme] % pool.size()]
+				cap_used[theme] += 1
+				cap_name = k.name
+				cap_desc = k.desc
+				cap_fx = k.fx
+			var cl := _build_cluster(center, theme, ang, cap_name, cap_desc, cap_fx)
 			var last := _chain(prev_id, prev_pos, by_id[cl.entry].pos, theme, PATH_PIPS)
 			_link(last, cl.entry)
 			prev_id = cl.exit
 			prev_pos = by_id[cl.exit].pos
+			col.append(cl)
+		clusters.append(col)
+	# Web cross-links: join each cluster to its clockwise neighbour at the same
+	# depth. These run in the gaps between cones, so the graph stays planar while
+	# gaining loops — no single linear path to any node.
+	for i in CLUSTERS_PER_BRANCH:
+		for b in ROOT_BRANCHES:
+			var a_cl: Dictionary = clusters[b][i]
+			var b_cl: Dictionary = clusters[(b + 1) % ROOT_BRANCHES][i]
+			var pa := _nearest_pip(a_cl, b_cl.center)
+			var pb := _nearest_pip(b_cl, by_id[pa].pos)
+			var d: float = by_id[pa].pos.distance_to(by_id[pb].pos)
+			var n: int = clampi(int(round(d / 1.3)), 1, 2)
+			var last := _chain(pa, by_id[pa].pos, by_id[pb].pos, THEME_ORDER[b], n)
+			_link(last, pb)
 
 # ---------------------------------------------------------------------------
 # Effect accumulation
