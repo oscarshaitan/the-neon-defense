@@ -1,2 +1,5 @@
 # Godot editor/import cache
 .godot/
+
+# Import sidecars Godot generates when it scans the export output dir
+build/**/*.import
