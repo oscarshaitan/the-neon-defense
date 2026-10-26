@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>The Neon Defense — Playground</title>
+    <link rel="icon" type="image/png" href="../assets/favicon.png" />
+    <script>
+      // Outside Google Playground there is no host SDK: use the bundled fake
+      // SDK (solo player) and inject the tuned values from playground_config.json.
+      window.__PLAYGROUND_PREVIEW__ = true;
+      window.playgroundConfig = {
+        startingCredits: 200,
+        coreMaxLives: 20,
+        empCooldown: 25,
+        overclockCooldown: 20,
+        defaultMusicVolume: 0.6,
+      };
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./src/index.tsx"></script>
+  </body>
+</html>

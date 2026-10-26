@@ -1,0 +1,44 @@
+[
+  {
+    "id": "bgm_tactical_synth",
+    "name": "Tactical Synthwave BGM",
+    "art_style": "cyberpunk-neon",
+    "category": null,
+    "media_type": "music",
+    "description": "Tactical Synthwave BGM",
+    "aspect_ratio": "1:1",
+    "usage": "Background music for the tactical combat waves",
+    "chroma_key": false,
+    "prompt": "128 BPM, high-intensity cyberpunk synthwave, driving sidechained analog synth bass, punchy 808 electro drums, bright neon lead arpeggios, atmospheric sci-fi tension, seamless electronic loop",
+    "actions": null,
+    "resolution": null
+  },
+  {
+    "id": "bgm_boss_clash",
+    "name": "Boss Clash Theme",
+    "art_style": "cyberpunk-neon",
+    "category": null,
+    "media_type": "music",
+    "description": "Boss Clash Theme",
+    "aspect_ratio": "1:1",
+    "usage": "Plays when an Apex Rift Titan boss appears on milestone waves",
+    "chroma_key": false,
+    "prompt": "148 BPM, aggressive darksynth boss battle track, driving industrial drums, distorted analog reese bass, screeching modular synthesizer lead, intense cyberpunk climax, relentless battle tension, seamless loop",
+    "actions": null,
+    "resolution": null
+  },
+  {
+    "id": "bgm_mutation_surge",
+    "name": "Mutation Anomaly Theme",
+    "art_style": "cyberpunk-neon",
+    "category": null,
+    "media_type": "music",
+    "description": "Mutation Anomaly Theme",
+    "aspect_ratio": "1:1",
+    "usage": "Plays when cosmic mutations and anomaly waves strike the defense grid",
+    "chroma_key": false,
+    "prompt": "135 BPM, glitching darkwave synth music, eerie resonant arpeggiators, heavy pulsing sub-bass, chaotic digital distortion, alien cyber atmosphere, intense cosmic anomaly tension, seamless loop",
+    "actions": null,
+    "resolution": null
+  }
+]

@@ -60,21 +60,36 @@ jobs:
           godot --headless --export-release "Web" build/web/index.html
           test -f build/web/index.pck  # fail the build if the export didn't produce a pck
 
+      # ── Playground (React) build ───────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: playground/package-lock.json
+
+      - name: Build Playground web
+        working-directory: playground
+        run: |
+          npm ci
+          npm run build
+
       # ── Assemble deploy folder ─────────────────────────────────────────────
       # Structure served by GitHub Pages:
       #   /                        → landing page
       #   /js/                     → JS game
       #   /flutter/build/web/      → Flutter web build (relative base-href)
       #   /godot/build/web/        → Godot web export (built above, no-threads)
+      #   /playground/build/web/   → Playground (React) Vite build (relative base)
       - name: Assemble site
         run: |
-          mkdir -p _site/js _site/flutter/build/web _site/godot/build/web _site/assets
+          mkdir -p _site/js _site/flutter/build/web _site/godot/build/web _site/playground/build/web _site/assets
           cp index.html _site/
           cp README.md  _site/
           cp -r assets/. _site/assets/
           cp -r js/. _site/js/
           cp -r flutter/build/web/. _site/flutter/build/web/
           cp -r godot/build/web/. _site/godot/build/web/
+          cp -r playground/build/web/. _site/playground/build/web/
 
       # ── Upload artifact for GitHub Pages ───────────────────────────────────
       - uses: actions/configure-pages@v4

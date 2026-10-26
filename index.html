@@ -12,6 +12,7 @@
             --neon-blue: #00f3ff;
             --neon-pink: #ff00ac;
             --neon-green: #00ff41;
+            --neon-violet: #a855f7;
             --bg-color: #050510;
         }
 
@@ -156,6 +157,23 @@
             transform: translateY(-2px);
         }
 
+        /* Playground button — violet */
+        .btn-playground {
+            color: var(--neon-violet);
+            border-color: rgba(168, 85, 247, 0.6);
+            box-shadow:
+                0 0 16px rgba(168, 85, 247, 0.2),
+                inset 0 0 16px rgba(168, 85, 247, 0.04);
+        }
+
+        .btn-playground:hover {
+            border-color: var(--neon-violet);
+            box-shadow:
+                0 0 32px rgba(168, 85, 247, 0.5),
+                inset 0 0 24px rgba(168, 85, 247, 0.1);
+            transform: translateY(-2px);
+        }
+
         .version {
             position: fixed;
             bottom: 1.5rem;
@@ -207,6 +225,11 @@
         <a class="btn btn-godot" href="./godot/build/web/index.html">
             <span>Engine</span>
             <span class="btn-label">Godot</span>
+        </a>
+
+        <a class="btn btn-playground" href="./playground/build/web/index.html">
+            <span>Playground</span>
+            <span class="btn-label">React</span>
         </a>
     </div>
 
