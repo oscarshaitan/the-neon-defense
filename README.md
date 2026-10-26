@@ -9,6 +9,7 @@ A neon-styled tower defense game — defend the core crystal against escalating 
 | **JavaScript** | Web (HTML5 Canvas) | Live — reference implementation |
 | **Flutter** | Web · Android · iOS | Live — full parity with the JS edition |
 | **Godot** | Web · Android · iOS | Live — Godot 4.3, GL Compatibility renderer |
+| **Playground** | Web (React + Canvas) | Live — built with Google Playground, exported and built with Vite |
 
 ---
 
@@ -128,13 +129,26 @@ Headless gameplay smoke test (boots the real scene, plays a wave, checks invaria
 cd godot && godot --headless -s tool/headless_smoke.gd
 ```
 
+### Playground version
+
+Built in [Google Playground](https://playground.google/g/IFTXk0) and exported as a
+React + TypeScript app. Runs outside Playground with the bundled fake SDK
+(single player); `playground_config.json` values are injected in `index.html`.
+
+```bash
+cd playground
+npm install
+npm run dev        # http://localhost:5173
+npm run build      # → playground/build/web (relative base, served at /playground/build/web/)
+```
+
 ---
 
 ## Project Structure
 
 ```
 the-neon-defense/
-  index.html                  — Landing page (links to all three versions)
+  index.html                  — Landing page (links to all four versions)
   js/                         — JavaScript edition
     index.html
     scripts/
@@ -153,6 +167,13 @@ the-neon-defense/
       02_tutorial_and_responsive.css
     manual.html
     technical_docs.html
+  playground/                 — Google Playground edition (React + Canvas, Vite build)
+    index.html                — Vite entry (fake SDK + config injection)
+    src/App.tsx               — Game loop, simulation, canvas rendering
+    src/TacticalHUD.tsx       — HUD, build bar, menus
+    src/constants.ts          — Tunables (mirrors playground_config.json)
+    src/utils/                — Playground SDK hook, fake SDK, audio helpers
+    public/assets/audio/      — Music loops
   flutter/                    — Flutter/Flame edition
     lib/
       main.dart               — App entry, GameWidget, HUD overlay layer

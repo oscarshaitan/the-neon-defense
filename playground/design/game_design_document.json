@@ -1,0 +1,79 @@
+{
+  "title": "The Neon Defense",
+  "hook": "Defend neon core against rifts",
+  "game_overview": "Endless tactical neon tower defense on an expanding grid. Rifts open across orbital zones, merging orthogonal paths into 6 Core doors. Defend with 4 tower classes and active commander powers.",
+  "artstyle": "modern-vector",
+  "genre": "tower_defense",
+  "winning_condition": "Endless survival run \u2014 achieve the highest wave record and survive as many escalating rift waves as possible.",
+  "losing_condition": "Core crystal lives reach zero (start with 20 lives).",
+  "player_mode": "single_player",
+  "supported_orientations": [
+    "landscape",
+    "wide"
+  ],
+  "input_methods": [
+    "touch",
+    "mouse",
+    "keyboard"
+  ],
+  "score_options": {
+    "score_type": "points",
+    "score_order": "higher_is_better"
+  },
+  "low_end_device_support": true,
+  "mobile_playable": true,
+  "tv_playable": false,
+  "language": [
+    "en"
+  ],
+  "content_descriptors": [],
+  "controls": [
+    {
+      "input": "Left Click / Tap",
+      "action": "Select hardpoint, place tower, trigger commander ability, or interact with HUD."
+    },
+    {
+      "input": "Mouse Drag / Swipe",
+      "action": "Pan tactical battlefield camera view."
+    },
+    {
+      "input": "Scroll Wheel / Pinch",
+      "action": "Zoom viewport in and out between 0.5x and 1.5x."
+    },
+    {
+      "input": "Q / W / E / R Keys",
+      "action": "Select Basic, Rapid, Sniper, or Arc tower class for placement."
+    },
+    {
+      "input": "1 / 2 Keys",
+      "action": "Target and trigger EMP Burst (1) or Overclock (2) commander abilities."
+    },
+    {
+      "input": "U Key",
+      "action": "Upgrade currently selected tower."
+    },
+    {
+      "input": "Delete / Backspace Key",
+      "action": "Sell currently selected tower for credits."
+    },
+    {
+      "input": "F / G Keys",
+      "action": "Repair base crystal health (F) or upgrade crystal shielding (G)."
+    },
+    {
+      "input": "Esc / P Keys",
+      "action": "Toggle pause menu and developer command center."
+    },
+    {
+      "input": "Virtual On-Screen Touch Buttons",
+      "action": "Mobile dock with tower buttons, ability triggers, upgrade/sell actions, and pause toggle."
+    }
+  ],
+  "sections": [
+    {
+      "title": "User Interface & HUD",
+      "content": "Dev Terminal Production Isolation: 1. Strict Debug Flag Gating: The DEV button in the top command header is completely hidden unless the session is launched with an explicit debug parameter (?debug=true or dev=true in URL) or running in development mode. On production/standard publish builds, no DEV button or lock icon is rendered whatsoever. 2. Clean Masked Security Modal: All text suggesting, mentioning, or hinting at 'NeonDev' has been eliminated from modal titles, field labels, and input placeholders. The input label reads strictly 'SECURITY CODE' and the placeholder reads 'ENTER CODE...', with verification checked against 'NeonDev' solely in internal logic.",
+      "summary": "Strict debug-flag gating for Dev mode with zero hints or suggestions in auth UI."
+    }
+  ]
+}
